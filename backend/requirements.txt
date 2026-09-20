@@ -1,0 +1,20 @@
+# ── DevGuard backend dependencies ───────────────────────────────────────────
+# Core stack — everything below installs cleanly with a plain `pip install`.
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2.6
+pydantic-settings>=2.1
+SQLAlchemy>=2.0
+python-multipart>=0.0.9
+websockets>=12.0
+httpx>=0.26
+pytest>=8.0
+
+# ── Optional: PostgreSQL (primary DB in production) ──────────────────────────
+# DevGuard defaults to SQLite for zero-config dev. To use PostgreSQL, set
+# DATABASE_URL=postgresql+psycopg2://user:pass@host/devguard and uncomment:
+# psycopg2-binary>=2.9
+
+# ── Optional: real LLM providers (DevGuard runs fully without these) ─────────
+# google-generativeai>=0.4      # Gemini
+# openai>=1.12                  # OpenAI-compatible APIs

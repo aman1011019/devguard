@@ -1,0 +1,191 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* ── LIGHT: bright, high-clarity control room ─────────────────────────── */
+  :root {
+    --c-canvas: 245 247 252;
+    --c-surface: 255 255 255;
+    --c-elevated: 255 255 255;
+    --c-overlay: 12 18 32;
+    --c-line: 223 229 241;
+    --c-strong: 197 208 226;
+    --c-ink: 11 18 32;
+    --c-muted: 90 105 130;
+    --c-faint: 138 151 172;
+    --c-brand: 79 70 229;
+    --c-brand-ink: 109 40 217;
+    --c-brand-soft: 238 238 255;
+    --c-accent: 8 145 178;
+    --c-ok: 5 150 105;
+    --c-warn: 202 111 6;
+    --c-bad: 225 29 72;
+    --c-info: 37 99 235;
+    --c-shadow: 15 23 42;
+    --c-hilite: 255 255 255;
+    color-scheme: light;
+  }
+
+  /* ── DARK: deep-space command center, independently tuned ─────────────── */
+  .dark {
+    --c-canvas: 5 7 13;
+    --c-surface: 11 16 27;
+    --c-elevated: 18 25 40;
+    --c-overlay: 2 3 8;
+    --c-line: 32 43 64;
+    --c-strong: 51 66 94;
+    --c-ink: 231 237 251;
+    --c-muted: 141 156 184;
+    --c-faint: 103 117 145;
+    --c-brand: 129 124 255;
+    --c-brand-ink: 167 139 250;
+    --c-brand-soft: 27 28 60;
+    --c-accent: 34 211 238;
+    --c-ok: 16 185 129;
+    --c-warn: 245 158 11;
+    --c-bad: 251 84 113;
+    --c-info: 96 165 250;
+    --c-shadow: 0 0 0;
+    --c-hilite: 255 255 255;
+    color-scheme: dark;
+  }
+
+  * {
+    border-color: rgb(var(--c-line));
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+    margin: 0;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior-y: none;
+    /* Ambient depth: two soft brand auroras fixed behind the app. */
+    background-image: radial-gradient(
+        68rem 34rem at 8% -8%,
+        rgb(var(--c-brand) / 0.13),
+        transparent 60%
+      ),
+      radial-gradient(52rem 30rem at 102% 6%, rgb(var(--c-accent) / 0.09), transparent 62%);
+    background-attachment: fixed;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--c-brand));
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  ::selection {
+    background: rgb(var(--c-brand) / 0.28);
+  }
+
+  /* Slim, theme-aware scrollbars. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--c-strong)) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgb(var(--c-strong) / 0.75);
+    border-radius: 99px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* Honour the OS reduced-motion setting everywhere. */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-2xl border border-line bg-surface shadow-card;
+  }
+
+  .panel-quiet {
+    @apply rounded-xl border border-line bg-surface/70;
+  }
+
+  /* Frosted layer used by the top bar, mobile nav and sheets. */
+  .glass {
+    background: rgb(var(--c-surface) / 0.82);
+    backdrop-filter: blur(14px) saturate(1.4);
+    -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-2xs font-semibold uppercase tracking-wider;
+  }
+
+  .kpi-value {
+    @apply font-mono text-2xl font-bold tracking-tight tabular-nums sm:text-3xl;
+  }
+
+  .label-eyebrow {
+    @apply text-2xs font-semibold uppercase tracking-[0.14em] text-faint;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Notch / gesture-bar safe areas for the mobile shell. */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .mb-safe {
+    margin-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Promote only animated layers — keeps GSAP work on the compositor. */
+  .gpu {
+    will-change: transform, opacity;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+
+  .contain-paint {
+    contain: paint;
+  }
+
+  .text-gradient {
+    @apply bg-brand-sweep bg-clip-text text-transparent;
+  }
+
+  .grid-backdrop {
+    background-image: theme("backgroundImage.grid-fine");
+    background-size: 34px 34px;
+    mask-image: radial-gradient(70% 60% at 50% 0%, #000 0%, transparent 78%);
+    -webkit-mask-image: radial-gradient(70% 60% at 50% 0%, #000 0%, transparent 78%);
+  }
+}

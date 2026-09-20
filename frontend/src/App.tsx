@@ -1,0 +1,108 @@
+import { Suspense, lazy } from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
+import { AppShell } from "@/components/layout/AppShell";
+import { SkeletonCard } from "@/components/ui/Skeleton";
+
+/** Route-level code splitting: the dashboard is the only screen on the critical
+ *  path, so the chart/scanner-heavy screens load on demand. */
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Incidents = lazy(() => import("@/pages/Incidents"));
+const Investigate = lazy(() => import("@/pages/Investigate"));
+const History = lazy(() => import("@/pages/History"));
+const Settings = lazy(() => import("@/pages/Settings"));
+const Inspector = lazy(() => import("@/pages/Inspector"));
+const NotFound = lazy(() => import("@/pages/NotFound"));
+
+function RouteFallback() {
+  return (
+    <div className="space-y-4 py-2">
+      <SkeletonCard />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <SkeletonCard />
+        <SkeletonCard />
+      </div>
+    </div>
+  );
+}
+
+export function App() {
+  return (
+    <Routes>
+      <Route element={<AppShell />}>
+        <Route
+          index
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <Dashboard />
+            </Suspense>
+          }
+        />
+        <Route
+          path="incidents"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <Incidents />
+            </Suspense>
+          }
+        />
+        <Route
+          path="incidents/:id"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <Investigate />
+            </Suspense>
+          }
+        />
+        <Route
+          path="investigate"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <Investigate />
+            </Suspense>
+          }
+        />
+        <Route
+          path="history"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <History />
+            </Suspense>
+          }
+        />
+        <Route
+          path="activity"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <History />
+            </Suspense>
+          }
+        />
+        <Route
+          path="settings"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <Settings />
+            </Suspense>
+          }
+        />
+        <Route
+          path="inspector"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <Inspector />
+            </Suspense>
+          }
+        />
+        <Route path="dashboard" element={<Navigate to="/" replace />} />
+        <Route
+          path="*"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <NotFound />
+            </Suspense>
+          }
+        />
+      </Route>
+    </Routes>
+  );
+}
