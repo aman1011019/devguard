@@ -27,6 +27,12 @@ export const Health = z.object({
   services_monitored: z.number(),
   active_incidents: z.number(),
   system_health: z.number(),
+  database: z.string().optional(),
+  websocket: z.string().optional(),
+  github: z.string().optional(),
+  investigating: z.number().optional(),
+  critical_services: z.number().optional(),
+  resolved_today: z.number().optional(),
 });
 export type Health = z.infer<typeof Health>;
 

@@ -78,14 +78,14 @@ export function DevGuardLogo({
 
       {showText && (
         <div className="flex flex-col">
-          <div className="flex items-center tracking-tight font-extrabold text-ink leading-none text-base">
-            <span>Dev</span>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-blue-600">
-              Guard
+          <div className="flex items-center tracking-wider font-extrabold text-ink leading-none text-base uppercase font-mono">
+            <span className="text-ink">DEV</span>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-blue-500">
+              GUARD
             </span>
           </div>
-          <span className="text-[0.6rem] tracking-[0.14em] uppercase text-muted font-mono font-medium mt-0.5">
-            Command Center
+          <span className="text-[0.55rem] tracking-[0.16em] uppercase text-sky-400/80 font-mono font-semibold mt-0.5 whitespace-nowrap">
+            PRODUCTION INCIDENT INVESTIGATOR
           </span>
         </div>
       )}

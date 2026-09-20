@@ -16,7 +16,21 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import codebase, demo, health, incidents, office_kit, voice, ws
+from app.api import (
+    codebase,
+    demo,
+    events,
+    health,
+    incidents,
+    logs,
+    office_kit,
+    search,
+    services,
+    telemetry,
+    voice,
+    webhooks,
+    ws,
+)
 from app.core.config import settings
 from app.core.database import init_db, session_scope
 from app.services.incident_service import seed_historical
@@ -41,8 +55,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="DevGuard API",
-    description="AI Production Incident Investigator — backend engine",
-    version="1.0.0",
+    description="AI Production Incident Investigator — real-time backend engine",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -60,6 +74,12 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(incidents.router)
 app.include_router(demo.router)
+app.include_router(services.router)
+app.include_router(search.router)
+app.include_router(events.router)
+app.include_router(webhooks.router)
+app.include_router(logs.router)
+app.include_router(telemetry.router)
 app.include_router(voice.router)
 app.include_router(office_kit.router)
 app.include_router(ws.router)

@@ -28,6 +28,7 @@ from app.models.models import (
     TimelineEvent,
 )
 from app.providers.factory import get_provider
+from app.realtime.event_bus import event_bus
 from app.services.ws_manager import ws_manager
 from app.simulation import fixtures
 from app.simulation.engine import simulation
@@ -38,7 +39,8 @@ _running: set[int] = set()
 
 
 async def _emit(incident_id: int, event: dict) -> None:
-    await ws_manager.broadcast(incident_id, event)
+    ev_type = event.get("event") or event.get("type") or "event"
+    await event_bus.publish(ev_type, event, incident_id=incident_id)
 
 
 def _persist_root_cause(db, incident: Incident, detail: dict) -> RootCause:

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Columns2, Rows3 } from "lucide-react";
+import { Columns2, Rows3, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Row = { kind: "add" | "del" | "meta" | "ctx"; text: string };
@@ -13,19 +13,14 @@ const classify = (line: string): Row => {
 };
 
 const ROW_STYLES: Record<Row["kind"], string> = {
-  add: "bg-ok/10 text-ok",
-  del: "bg-bad/10 text-bad",
-  meta: "bg-elevated text-faint",
+  add: "bg-ok/10 text-ok font-medium",
+  del: "bg-bad/10 text-bad font-medium",
+  meta: "bg-elevated text-faint font-semibold",
   ctx: "text-muted",
 };
 
 const PREFIX: Record<Row["kind"], string> = { add: "+", del: "−", meta: "", ctx: " " };
 
-/**
- * Unified diff by default with an optional side-by-side view. Line numbers are
- * derived per side so the before/after view lines up even where the hunk sizes
- * differ. Content is rendered as text only — never interpreted.
- */
 export function DiffViewer({
   diff,
   before,
@@ -40,25 +35,43 @@ export function DiffViewer({
   className?: string;
 }) {
   const [split, setSplit] = useState(false);
+  const [copied, setCopied] = useState(false);
   const rows = useMemo(() => diff.split("\n").map(classify), [diff]);
   const canSplit = Boolean(before && after);
 
+  const handleCopy = () => {
+    navigator.clipboard.writeText(diff);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
-    <div className={cn("overflow-hidden rounded-2xl border border-line bg-surface", className)}>
-      <div className="flex items-center justify-between gap-2 border-b border-line bg-elevated/60 px-3 py-2">
-        <span className="font-mono text-2xs uppercase tracking-[0.1em] text-faint">
-          {language ?? "diff"}
+    <div className={cn("overflow-hidden rounded-2xl border border-line bg-surface font-mono", className)}>
+      <div className="flex items-center justify-between gap-2 border-b border-line bg-elevated/60 px-3.5 py-2">
+        <span className="text-2xs uppercase tracking-[0.1em] text-sky-400 font-bold">
+          {language ?? "diff"} · patch preview
         </span>
-        {canSplit ? (
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setSplit((v) => !v)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2 py-1 text-2xs font-semibold text-muted transition-colors hover:text-ink"
+            onClick={handleCopy}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2 py-1 text-2xs font-semibold text-muted transition-colors hover:text-ink hover:bg-elevated"
+            title="Copy diff to clipboard"
           >
-            {split ? <Rows3 className="h-3 w-3" aria-hidden /> : <Columns2 className="h-3 w-3" aria-hidden />}
-            {split ? "Unified" : "Side by side"}
+            {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+            <span>{copied ? "Copied" : "Copy diff"}</span>
           </button>
-        ) : null}
+          {canSplit ? (
+            <button
+              type="button"
+              onClick={() => setSplit((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2 py-1 text-2xs font-semibold text-muted transition-colors hover:text-ink hover:bg-elevated"
+            >
+              {split ? <Rows3 className="h-3 w-3" aria-hidden /> : <Columns2 className="h-3 w-3" aria-hidden />}
+              {split ? "Unified" : "Side by side"}
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {split && canSplit ? (

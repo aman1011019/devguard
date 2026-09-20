@@ -1,8 +1,8 @@
 import {
-  History as ActivityIcon,
-  LayoutDashboard,
+  Activity,
+  Radio,
   Radar,
-  ScanSearch,
+  Server,
   Settings,
   Siren,
   type LucideIcon,
@@ -12,18 +12,22 @@ export type NavItem = {
   to: string;
   label: string;
   icon: LucideIcon;
-  /** Mobile bottom nav is limited to Incidents, Investigate, Activity as specified in Section 9 */
   mobile: boolean;
   end?: boolean;
 };
 
 export const NAV_ITEMS: NavItem[] = [
-  { to: "/", label: "Command Center", icon: LayoutDashboard, mobile: false, end: true },
+  { to: "/", label: "Live Command", icon: Radio, mobile: true, end: true },
   { to: "/incidents", label: "Incidents", icon: Siren, mobile: true },
-  { to: "/investigate", label: "Investigate", icon: Radar, mobile: true },
-  { to: "/activity", label: "Activity", icon: ActivityIcon, mobile: true },
+  { to: "/investigate", label: "Investigate", icon: Radar, mobile: false },
+  { to: "/services", label: "Services", icon: Server, mobile: true },
+  { to: "/activity", label: "Activity", icon: Activity, mobile: true },
   { to: "/settings", label: "Settings", icon: Settings, mobile: false },
-  { to: "/inspector", label: "Codebase Scan", icon: ScanSearch, mobile: false },
 ];
 
-export const MOBILE_NAV = NAV_ITEMS.filter((i) => i.mobile);
+export const MOBILE_NAV: NavItem[] = [
+  { to: "/incidents", label: "Incidents", icon: Siren, mobile: true },
+  { to: "/", label: "Live", icon: Radio, mobile: true, end: true },
+  { to: "/services", label: "Services", icon: Server, mobile: true },
+  { to: "/activity", label: "Activity", icon: Activity, mobile: true },
+];

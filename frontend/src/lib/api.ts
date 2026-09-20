@@ -118,11 +118,31 @@ export const api = {
   settings: () => request("/api/settings", T.UserSettings),
   updateSettings: (payload: T.UserSettingsInput) =>
     request("/api/settings", T.UserSettings, put(payload)),
+
+  // ── Real-Time Command Center APIs ──────────────────────────────────────────
+  services: () => request("/api/services", null),
+  serviceDetail: (id: string) => request(`/api/services/${id}`, null),
+  search: (q: string) => request(`/api/search?q=${encodeURIComponent(q)}`, null),
+  systemEvents: (after?: string) =>
+    request(`/api/events${after ? `?after=${encodeURIComponent(after)}` : ""}`, null),
+  incidentEvents: (id: number, after?: string) =>
+    request(`/api/incidents/${id}/events${after ? `?after=${encodeURIComponent(after)}` : ""}`, null),
+  reportIncident: (data: { service: string; severity: string; description: string; repository?: string; branch?: string }) =>
+    request("/api/incidents", null, post(data)),
+  ingestLog: (data: { service: string; level: string; message: string; trace_id?: string; request_id?: string; incident_id?: number }) =>
+    request("/api/logs/ingest", null, post(data)),
+  ingestTelemetry: (data: { service: string; latency_ms: number; error_rate: number; db_queries: number; db_latency_ms?: number; incident_id?: number }) =>
+    request("/api/telemetry", null, post(data)),
+  triggerGithubTestFail: () => request("/api/webhooks/github/test-fail", null, post({})),
 };
 
-/** ws:// URL for an incident channel (0 = global dashboard channel). */
-export function wsUrl(incidentId: number): string {
-  if (API_BASE) return `${API_BASE.replace(/^http/, "ws")}/ws/incidents/${incidentId}`;
+/** ws:// URL for a channel ("system" or incidentId). */
+export function wsUrl(channel: number | string): string {
+  const norm = String(channel).toLowerCase();
+  const path = norm === "0" || norm === "system" || norm === "global" ? "ws/system" : `ws/${channel}`;
+  if (API_BASE) {
+    return `${API_BASE.replace(/^http/, "ws")}/${path}`;
+  }
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${proto}//${window.location.host}/ws/incidents/${incidentId}`;
+  return `${proto}//${window.location.host}/${path}`;
 }

@@ -48,6 +48,28 @@ async def inject_incident(db: Session = Depends(get_db)) -> IncidentDetail:
     db.refresh(incident)
     detail = to_detail(incident)
 
+    from app.realtime.event_bus import event_bus
+
+    await event_bus.publish(
+        "incident_created",
+        {
+            "incident_id": incident.id,
+            "service": incident.service,
+            "title": incident.title,
+            "severity": incident.severity,
+            "status": incident.status,
+            "error_rate": incident.error_rate,
+            "latency_ms": incident.latency_ms,
+            "db_queries": incident.db_queries_per_request,
+            "deployment_version": incident.deployment_version,
+            "author": "j.tanaka",
+            "commit": "a81f2c7",
+            "created": created,
+            "source": "Demo Engine",
+        },
+        incident_id=incident.id,
+    )
+
     await ws_manager.broadcast_global(
         {
             "type": "incident_detected",
@@ -69,6 +91,8 @@ async def reset_demo(db: Session = Depends(get_db)) -> ActionResponse:
     Removes still-open incidents (keeps resolved history) and clears the
     WebSocket replay buffers so a fresh demo run starts clean.
     """
+    from app.realtime.event_bus import event_bus
+
     active = db.scalars(
         select(Incident).where(Incident.status.in_([s.value for s in ACTIVE_STATUSES]))
     ).all()
@@ -82,6 +106,7 @@ async def reset_demo(db: Session = Depends(get_db)) -> ActionResponse:
     simulation.reset()
     ws_manager.clear_history(GLOBAL_CHANNEL)
 
+    await event_bus.publish("system_status_changed", {"status": "HEALTHY", "active_incidents": 0})
     await ws_manager.broadcast_global({"type": "system_reset", "removed": removed})
     return ActionResponse(
         ok=True,

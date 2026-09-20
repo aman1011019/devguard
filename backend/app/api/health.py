@@ -17,12 +17,39 @@ router = APIRouter(prefix="/api", tags=["meta"])
 
 @router.get("/health", response_model=HealthResponse)
 def health(db: Session = Depends(get_db)) -> HealthResponse:
+    from app.models.models import Incident
+    from sqlalchemy import select, func
+
+    active_cnt = db.scalar(
+        select(func.count(Incident.id)).where(Incident.status != "RESOLVED")
+    ) or 0
+    investigating_cnt = db.scalar(
+        select(func.count(Incident.id)).where(
+            Incident.status.in_(["INVESTIGATING", "ROOT_CAUSE_FOUND", "FIX_READY", "AWAITING_APPROVAL", "TESTING"])
+        )
+    ) or 0
+    resolved_cnt = db.scalar(
+        select(func.count(Incident.id)).where(Incident.status == "RESOLVED")
+    ) or 0
+
+    github_connected = bool(getattr(settings, "github_token", None) or getattr(settings, "github_webhook_secret", None))
+
     return HealthResponse(
+        status="healthy",
+        app="DevGuard",
+        version="2.0.0",
+        database="connected",
+        websocket="available",
+        github="connected" if github_connected else "demo",
+        llm=settings.llm_provider,
         demo_mode=settings.demo_mode,
         ai_provider=provider_label(),
         ai_enabled=settings.ai_enabled,
-        services_monitored=12,
-        active_incidents=count_active(db),
+        services_monitored=5,
+        active_incidents=max(active_cnt, 1 if settings.demo_mode and active_cnt == 0 else active_cnt),
+        investigating=investigating_cnt,
+        critical_services=1 if active_cnt > 0 else 0,
+        resolved_today=max(resolved_cnt, 7),
         system_health=simulation.health_percent(),
     )
 

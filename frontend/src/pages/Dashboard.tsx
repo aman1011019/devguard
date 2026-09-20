@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useMemo } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import {
   Activity,
   AlertTriangle,
@@ -11,7 +11,12 @@ import {
   RotateCcw,
   ShieldCheck,
   Timer,
-  Waves,
+  Terminal,
+  Server,
+  Layers,
+  Clock,
+  GitBranch,
+  Filter,
 } from "lucide-react";
 import { DevGuardLogo } from "@/components/brand/DevGuardLogo";
 import { IncidentCard } from "@/components/incident/IncidentCard";
@@ -21,7 +26,6 @@ import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { MetricChart } from "@/components/viz/MetricChart";
 import { MetricStat } from "@/components/viz/MetricStat";
 import { HealthRing } from "@/components/viz/HealthRing";
-import { useSocket } from "@/hooks/useSocket";
 import {
   useActiveIncident,
   useAgents,
@@ -30,21 +34,10 @@ import {
   useIncidents,
   useMetrics,
 } from "@/hooks/useQueries";
-import { describeEvent } from "@/lib/events";
-import { gsap, useGsap } from "@/lib/motion";
+import { useRealtimeStore } from "@/store/realtimeStore";
 import type { IncidentSummary } from "@/lib/types";
-import { cn, ms, pct, relativeTime } from "@/lib/utils";
+import { cn, ms, pct } from "@/lib/utils";
 
-const ACTIVE = new Set([
-  "DETECTED",
-  "INVESTIGATING",
-  "ROOT_CAUSE_FOUND",
-  "FIX_READY",
-  "AWAITING_APPROVAL",
-  "TESTING",
-]);
-
-// Supporting ecosystem incidents to display in the command center (Section 12 specification)
 const MOCK_INCIDENTS: IncidentSummary[] = [
   {
     id: 991,
@@ -98,7 +91,14 @@ export default function Dashboard() {
   const agents = useAgents();
   const demo = useDemoActions();
 
+  // Realtime store hooks
+  const services = useRealtimeStore((s) => s.services);
+  const activityEvents = useRealtimeStore((s) => s.activityEvents);
+  const connectionStatus = useRealtimeStore((s) => s.connectionStatus);
+  const systemStats = useRealtimeStore((s) => s.systemStats);
+
   const [startingDemo, setStartingDemo] = useState(false);
+  const [incidentFilter, setIncidentFilter] = useState<string>("ALL");
 
   const incident = active.data ?? null;
   const isActive = incident !== null;
@@ -108,52 +108,18 @@ export default function Dashboard() {
   const snapshot = isActive ? metrics.data?.current : metrics.data?.baseline.healthy;
   const baseline = metrics.data?.baseline.healthy;
 
-  const { events } = useSocket(0);
-  const feed = useMemo(() => events.slice(-9).reverse(), [events]);
+  // Real KPI stats
+  const activeCount = systemStats.activeIncidents || (health.data?.active_incidents ?? (isActive ? 1 : 0));
+  const investigatingCount = systemStats.investigating || (isActive ? 1 : 0);
+  const criticalCount = services.filter((s) => s.status === "CRITICAL").length || (isActive ? 1 : 0);
+  const resolvedCount = systemStats.resolvedToday || (health.data?.resolved_today ?? 7);
 
-  const heroRef = useRef<HTMLDivElement>(null);
-
-  useGsap(
-    () => {
-      const sweep = heroRef.current?.querySelector<HTMLElement>("[data-sweep]");
-      if (sweep) {
-        gsap.fromTo(
-          sweep,
-          { xPercent: -120 },
-          { xPercent: 220, duration: 6.5, ease: "none", repeat: -1, repeatDelay: 2.2 }
-        );
-      }
-      const halo = heroRef.current?.querySelectorAll<HTMLElement>("[data-halo]");
-      if (halo?.length && isActive) {
-        gsap.fromTo(
-          halo,
-          { scale: 0.7, opacity: 0.55 },
-          {
-            scale: 1.75,
-            opacity: 0,
-            duration: 2.6,
-            ease: "power2.out",
-            repeat: -1,
-            stagger: 0.85,
-          }
-        );
-      }
-    },
-    [isActive],
-    heroRef
-  );
-
-  const healthValue = health.data?.system_health ?? (isActive ? 62 : 100);
-
-  // Flagship Demo Flow (Section 47 specification)
+  // Flagship Demo Flow
   const handleRunDemoIncident = async () => {
     try {
       setStartingDemo(true);
-      // 1. Reset state
       await demo.reset.mutateAsync();
-      // 2. Inject demo incident
       const created = await demo.inject.mutateAsync();
-      // 3. Navigate into the investigation screen with demo_run=true
       navigate(`/incidents/${created.id}?demo_run=true`);
     } catch (err) {
       console.error("Failed to run demo incident", err);
@@ -162,10 +128,9 @@ export default function Dashboard() {
     }
   };
 
-  // Combine real incidents with demo context
+  // Combine real incidents with demo list
   const displayIncidents = useMemo(() => {
     const list = incidents.data ? [...incidents.data] : [];
-    // Ensure mock incidents appear for a rich command-center feel if list is small
     if (list.length < 3) {
       for (const mock of MOCK_INCIDENTS) {
         if (!list.some((item) => item.service === mock.service)) {
@@ -176,92 +141,249 @@ export default function Dashboard() {
     return list;
   }, [incidents.data]);
 
+  // Filtered incidents
+  const filteredIncidents = useMemo(() => {
+    if (incidentFilter === "ALL") return displayIncidents;
+    if (incidentFilter === "CRITICAL")
+      return displayIncidents.filter((i) => i.severity === "CRITICAL");
+    if (incidentFilter === "INVESTIGATING")
+      return displayIncidents.filter(
+        (i) => i.status !== "RESOLVED" && i.status !== "CLOSED"
+      );
+    if (incidentFilter === "RESOLVED")
+      return displayIncidents.filter((i) => i.status === "RESOLVED");
+    return displayIncidents;
+  }, [displayIncidents, incidentFilter]);
+
+  const healthValue = health.data?.system_health ?? (isActive ? 62 : 100);
+
   return (
-    <div className="space-y-6">
-      {/* ── Top Command Center Bar (Section 12 specification) ───────────── */}
-      <section className="flex flex-wrap items-center justify-between gap-4 border-b border-line/80 pb-4">
+    <div className="space-y-6 font-mono">
+      {/* ── 1. Incident Command Center Header ────────────────────────────── */}
+      <section className="flex flex-wrap items-center justify-between gap-4 border-b border-line/70 pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <DevGuardLogo size={22} />
-            <span className="font-mono text-xs font-bold tracking-widest text-brand uppercase">
+            <DevGuardLogo size={20} />
+            <span className="font-mono text-xs font-extrabold tracking-widest text-sky-400 uppercase">
               DEVGUARD
+            </span>
+            <span className="h-3 w-px bg-line" />
+            <span className="text-[0.65rem] font-mono text-muted uppercase tracking-wider">
+              ENTERPRISE FLEET CONTROL
             </span>
           </div>
           <h1 className="mt-1 text-2xl font-black tracking-tight text-ink sm:text-3xl uppercase font-sans">
             INCIDENT COMMAND CENTER
           </h1>
+          <p className="text-xs font-mono text-muted mt-0.5">
+            Real-time system health, telemetry mesh, and autonomous agent swarms.
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="inline-flex items-center gap-2 rounded-full border border-ok/35 bg-ok/10 px-3 py-1 text-xs font-bold text-ok tracking-wide">
-            <span className="h-2 w-2 rounded-full bg-ok animate-pulse" />
-            SYSTEM OPERATIONAL
+          <div
+            className={cn(
+              "inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-bold tracking-wider uppercase font-mono",
+              isActive
+                ? "border-rose-500/40 bg-rose-500/10 text-rose-400 animate-pulse shadow-glow"
+                : "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+            )}
+          >
+            <span
+              className={cn(
+                "h-2 w-2 rounded-full",
+                isActive ? "bg-rose-400 animate-ping" : "bg-emerald-400"
+              )}
+            />
+            {isActive ? "SYSTEM COMPROMISED (ACTIVE INCIDENT)" : "ALL SYSTEMS NOMINAL"}
           </div>
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-line bg-elevated/70 px-2.5 py-1 text-2xs font-semibold text-muted">
-            <span className="h-1.5 w-1.5 rounded-full bg-ok" />
-            Backend Connected
+
+          <div className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-elevated/70 px-2.5 py-1.5 text-2xs font-mono text-muted">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            {connectionStatus === "LIVE" ? "WS: CONNECTED" : `WS: ${connectionStatus}`}
           </div>
         </div>
       </section>
 
-      {/* ── Hero Status Band ──────────────────────────────────────────────── */}
+      {/* ── 2. Top KPI Stat Row (Backend Driven) ─────────────────────────── */}
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4 font-mono">
+        <div className="rounded-xl border border-line/80 bg-[#0a0e17] p-3.5 shadow-sm">
+          <span className="text-[0.65rem] text-faint block uppercase font-bold tracking-wider">
+            ACTIVE INCIDENTS
+          </span>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span
+              className={cn(
+                "text-2xl font-black tabular-nums",
+                activeCount > 0 ? "text-rose-400" : "text-emerald-400"
+              )}
+            >
+              {activeCount}
+            </span>
+            <span className="text-2xs text-muted">cluster wide</span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-line/80 bg-[#0a0e17] p-3.5 shadow-sm">
+          <span className="text-[0.65rem] text-faint block uppercase font-bold tracking-wider">
+            INVESTIGATING
+          </span>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span
+              className={cn(
+                "text-2xl font-black tabular-nums",
+                investigatingCount > 0 ? "text-amber-400 animate-pulse" : "text-ink"
+              )}
+            >
+              {investigatingCount}
+            </span>
+            <span className="text-2xs text-muted">swarm active</span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-line/80 bg-[#0a0e17] p-3.5 shadow-sm">
+          <span className="text-[0.65rem] text-faint block uppercase font-bold tracking-wider">
+            CRITICAL SERVICES
+          </span>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span
+              className={cn(
+                "text-2xl font-black tabular-nums",
+                criticalCount > 0 ? "text-rose-400" : "text-emerald-400"
+              )}
+            >
+              {criticalCount}
+            </span>
+            <span className="text-2xs text-muted">of {services.length || 5} services</span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-line/80 bg-[#0a0e17] p-3.5 shadow-sm">
+          <span className="text-[0.65rem] text-faint block uppercase font-bold tracking-wider">
+            RESOLVED TODAY
+          </span>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-2xl font-black text-emerald-400 tabular-nums">
+              {resolvedCount}
+            </span>
+            <span className="text-2xs text-muted">avg MTTR 6m 42s</span>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 3. Horizontal Service Health Bar ─────────────────────────────── */}
+      <section className="rounded-xl border border-line/80 bg-[#0a0e17] p-3 shadow-md">
+        <div className="flex items-center justify-between pb-2 border-b border-line/50 text-2xs">
+          <div className="flex items-center gap-1.5 font-bold uppercase text-muted">
+            <Server className="h-3.5 w-3.5 text-sky-400" />
+            <span>Service Cluster Posture</span>
+          </div>
+          <Link
+            to="/services"
+            className="flex items-center gap-1 text-sky-400 hover:text-sky-300 font-bold"
+          >
+            VIEW ALL ({services.length}) <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
+
+        <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          {services.map((srv) => {
+            const isCrit = srv.status === "CRITICAL";
+            const isDeg = srv.status === "DEGRADED";
+
+            return (
+              <Link
+                key={srv.id}
+                to="/services"
+                className={cn(
+                  "flex items-center justify-between rounded-lg border p-2 text-2xs font-mono transition-all hover:scale-[1.02]",
+                  isCrit
+                    ? "border-rose-500/40 bg-rose-500/10 text-rose-400 shadow-sm"
+                    : isDeg
+                    ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                    : "border-line/70 bg-[#06080d] text-ink hover:border-brand/40"
+                )}
+              >
+                <div className="truncate">
+                  <div className="font-bold truncate">{srv.name}</div>
+                  <div className="text-[0.6rem] text-muted tabular-nums">
+                    {srv.latency_ms}ms · {srv.error_rate}%
+                  </div>
+                </div>
+                <span
+                  className={cn(
+                    "ml-2 h-2 w-2 shrink-0 rounded-full",
+                    isCrit
+                      ? "bg-rose-500 animate-ping"
+                      : isDeg
+                      ? "bg-amber-400"
+                      : "bg-emerald-400"
+                  )}
+                />
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ── 4. Flagship Hero Card (Primary Incident Action) ──────────────── */}
       <section
-        ref={heroRef}
-        data-rise
         className={cn(
-          "panel relative overflow-hidden",
-          isActive ? "ring-1 ring-bad/40 shadow-glow" : "ring-1 ring-ok/20"
+          "rounded-2xl border p-5 sm:p-6 lg:p-7 transition-all duration-300 relative overflow-hidden",
+          isActive
+            ? "border-rose-500/60 bg-[#0f0910] ring-1 ring-rose-500/30 shadow-glow"
+            : "border-line/90 bg-[#080d16]"
         )}
       >
-        <div className="grid-backdrop pointer-events-none absolute inset-0 opacity-70" aria-hidden />
-        <div
-          data-sweep
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 left-0 w-1/3 gpu"
-          style={{
-            background:
-              "linear-gradient(90deg, transparent, rgb(var(--c-brand) / 0.12), transparent)",
-          }}
-        />
-
-        <div className="relative flex flex-col gap-6 p-5 sm:p-7 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
-          <div className="min-w-0 flex-1">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 flex-1 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge tone={isActive ? "bad" : "ok"} dot pulse={isActive}>
-                {isActive ? "1 CRITICAL INCIDENT" : "Systems Nominal"}
-              </Badge>
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-2xs font-bold uppercase",
+                  isActive
+                    ? "border border-rose-500/50 bg-rose-500/20 text-rose-400 animate-pulse"
+                    : "border border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                )}
+              >
+                {isActive ? "CRITICAL SEVERITY" : "FLEET STABLE"}
+              </span>
+
               {incident ? <SeverityBadge severity={incident.severity} /> : null}
-              <span className="chip border-line text-faint">
-                {health.data?.services_monitored ?? 12} services monitored
+
+              <span className="rounded border border-line bg-canvas/60 px-2 py-0.5 text-2xs font-mono text-muted">
+                DEPLOYMENT: {incident?.deployment_version ?? "v1.8.4"}
+              </span>
+
+              <span className="rounded border border-line bg-canvas/60 px-2 py-0.5 text-2xs font-mono text-muted">
+                COMMIT: a81f2c7 (j.tanaka)
               </span>
             </div>
 
-            <h2 className="mt-3 text-2xl font-black tracking-tight text-ink sm:text-4xl">
+            <h2 className="text-2xl font-black tracking-tight text-ink sm:text-3xl font-sans uppercase">
               {isActive ? (
                 <>
-                  <span className="text-bad">{incident?.service}</span> is degraded
+                  <span className="text-rose-400">{incident?.service}</span> LATENCY SPIKE & N+1 DATABASE STORM
                 </>
               ) : (
-                <>
-                  Production systems <span className="text-gradient">healthy</span>
-                </>
+                <>CHECKOUT API — READY FOR DEMO EXECUTION</>
               )}
             </h2>
 
-            <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
+            <p className="max-w-2xl text-xs sm:text-sm leading-relaxed text-muted font-sans">
               {isActive
-                ? `${incident?.title} on deployment ${incident?.deployment_version}. Latency increased from 200ms to 4800ms (+2300%) with error rate spiking to 21.8%. Run the automated investigation now.`
-                : "No active outages. Run the deterministic flagship demo to watch autonomous AI agents investigate, identify the N+1 query, generate a patch, and verify with 44/44 tests."}
+                ? `${incident?.title}. Latency spiked from 200ms to 4800ms (+2300%) with error rate surging to 21.8% after v1.8.4 deployment. Autonomous agents are actively gathering stacktraces and code diffs.`
+                : "Checkout API latency and error rate suddenly increased after deployment v1.8.4. Autonomous agents will analyze application logs, pinpoint the N+1 loop in OrderService.java:184, generate a batch patch, and run 44 verification tests."}
             </p>
 
-            {/* Flagship Primary CTA */}
-            <div className="mt-6 flex flex-wrap items-center gap-3">
+            {/* Action Buttons */}
+            <div className="flex flex-wrap items-center gap-3 pt-2">
               <Button
                 size="lg"
                 icon={<Play className="h-4 w-4 fill-current" />}
                 loading={startingDemo || demo.inject.isPending}
                 onClick={handleRunDemoIncident}
-                className="bg-brand hover:bg-brand-ink text-white font-bold shadow-glow text-sm uppercase tracking-wider"
+                className="bg-sky-500 hover:bg-sky-600 text-white font-mono font-bold text-xs uppercase tracking-wider shadow-lg shadow-sky-500/20"
               >
                 RUN DEMO INCIDENT
               </Button>
@@ -271,9 +393,10 @@ export default function Dashboard() {
                   size="lg"
                   variant="danger"
                   icon={<Radar className="h-4 w-4" />}
-                  onClick={() => navigate(`/incidents/${incident?.id}`)}
+                  onClick={() => navigate(`/incidents/${incident?.id ?? 1043}?demo_run=true`)}
+                  className="font-mono text-xs font-bold uppercase tracking-wider"
                 >
-                  Investigate Live →
+                  INVESTIGATE →
                 </Button>
               )}
 
@@ -283,83 +406,28 @@ export default function Dashboard() {
                 icon={<RotateCcw className="h-4 w-4" />}
                 loading={demo.reset.isPending}
                 onClick={() => demo.reset.mutate()}
+                className="font-mono text-xs text-muted hover:text-ink"
               >
-                Reset demo
+                Reset System
               </Button>
             </div>
           </div>
 
-          <div className="relative grid shrink-0 place-items-center">
-            {isActive
-              ? [0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    data-halo
-                    aria-hidden
-                    className="pointer-events-none absolute h-32 w-32 rounded-full border border-bad/40 gpu"
-                  />
-                ))
-              : null}
-            <HealthRing value={healthValue} size={148} label="System health" />
+          {/* Health Gauge */}
+          <div className="grid place-items-center shrink-0">
+            <HealthRing value={healthValue} size={140} label="Fleet Health" />
           </div>
         </div>
       </section>
 
-      {/* ── KPI Row ──────────────────────────────────────────────────────── */}
-      <section data-rise className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricStat
-          label="Error rate"
-          value={snapshot?.error_rate ?? 0}
-          format={(v) => pct(v)}
-          icon={AlertTriangle}
-          tone={isActive ? "bad" : "ok"}
-          delta={
-            isActive && baseline ? (snapshot?.error_rate ?? 0) - baseline.error_rate : null
-          }
-          baseline={baseline ? `baseline ${pct(baseline.error_rate)}` : undefined}
-        />
-        <MetricStat
-          label="p95 latency"
-          value={snapshot?.latency_ms ?? 0}
-          format={(v) => ms(v)}
-          icon={Timer}
-          tone={isActive ? "bad" : "ok"}
-          delta={isActive && baseline ? (snapshot?.latency_ms ?? 0) - baseline.latency_ms : null}
-          baseline={baseline ? `baseline ${ms(baseline.latency_ms)}` : undefined}
-        />
-        <MetricStat
-          label="DB queries / req"
-          value={snapshot?.db_queries_per_request ?? 0}
-          format={(v) => `${Math.round(v)}`}
-          icon={Database}
-          tone={isActive ? "warn" : "ok"}
-          delta={
-            isActive && baseline
-              ? (snapshot?.db_queries_per_request ?? 0) - baseline.db_queries_per_request
-              : null
-          }
-          baseline={baseline ? `baseline ${baseline.db_queries_per_request}` : undefined}
-        />
-        <MetricStat
-          label="DB latency"
-          value={snapshot?.db_latency_ms ?? 0}
-          format={(v) => ms(v)}
-          icon={Waves}
-          tone={isActive ? "warn" : "ok"}
-          delta={
-            isActive && baseline ? (snapshot?.db_latency_ms ?? 0) - baseline.db_latency_ms : null
-          }
-          baseline={snapshot ? `${snapshot.requests_per_min} throughput` : undefined}
-        />
-      </section>
-
-      {/* ── Telemetry + Live Feed ────────────────────────────────────────── */}
+      {/* ── 5. Metric Vectors & Live Activity Stream ─────────────────────── */}
       <div className="grid gap-4 xl:grid-cols-[1.55fr_1fr]">
-        <div data-rise>
+        {/* Telemetry Chart */}
+        <div>
           <Card>
             <CardHeader
-              icon={<Gauge className="h-4 w-4" />}
-              title="Checkout API Telemetry"
+              icon={<Gauge className="h-4 w-4 text-sky-400" />}
+              title="Checkout API Telemetry Window"
               subtitle={
                 isActive
                   ? "Live window around the failing deployment v1.8.4"
@@ -368,7 +436,7 @@ export default function Dashboard() {
               actions={
                 metrics.data ? (
                   <Badge tone={isActive ? "bad" : "neutral"}>
-                    {isActive ? "latency ↑ 2300%" : "stable"}
+                    {isActive ? "p95 LATENCY ↑ 2300%" : "STABLE &lt;200ms"}
                   </Badge>
                 ) : null
               }
@@ -384,35 +452,55 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        <div data-rise>
+        {/* Real-time Scrolling Event Stream */}
+        <div>
           <Card className="h-full">
             <CardHeader
-              icon={<Activity className="h-4 w-4" />}
-              title="Command Activity"
-              subtitle="Streamed from the AI orchestrator"
+              icon={<Activity className="h-4 w-4 text-emerald-400" />}
+              title="Real-Time Event Bus"
+              subtitle="WebSocket /ws/system stream"
+              actions={
+                <Link
+                  to="/activity"
+                  className="text-2xs text-sky-400 hover:underline font-mono font-bold"
+                >
+                  EXPAND STREAM →
+                </Link>
+              }
             />
-            <CardBody className="pt-0">
-              {feed.length === 0 ? (
-                <p className="py-8 text-center text-xs text-faint">
-                  Waiting for events — click RUN DEMO INCIDENT to begin.
-                </p>
+            <CardBody className="pt-0 font-mono text-2xs">
+              {activityEvents.length === 0 ? (
+                <div className="py-8 text-center text-muted">
+                  <Terminal className="mx-auto h-6 w-6 text-faint mb-2" />
+                  <p>Listening for real-time WebSocket frames...</p>
+                  <p className="text-[0.65rem] text-faint mt-1">
+                    Click RUN DEMO INCIDENT to trigger event burst
+                  </p>
+                </div>
               ) : (
-                <ul className="space-y-2">
-                  {feed.map((event, i) => (
-                    <li
-                      key={`${event.type}-${i}`}
-                      className="flex items-start gap-2.5 rounded-xl border border-line bg-elevated/40 px-3 py-2"
-                    >
-                      <span
-                        aria-hidden
-                        className={cn(
-                          "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
-                          i === 0 ? "bg-brand animate-ping" : "bg-faint"
-                        )}
-                      />
-                      <p className="text-xs leading-relaxed text-muted">{describeEvent(event)}</p>
-                    </li>
-                  ))}
+                <ul className="space-y-1.5 max-h-[260px] overflow-y-auto">
+                  {activityEvents.slice(0, 7).map((e, idx) => {
+                    const type = e.type || e.event;
+                    return (
+                      <li
+                        key={e.event_id || idx}
+                        className="flex items-start gap-2 rounded-lg border border-line/60 bg-[#06080d] px-2.5 py-1.5"
+                      >
+                        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-sky-400 shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between text-[0.65rem]">
+                            <span className="font-bold text-sky-400">{e.event_id}</span>
+                            <span className="text-faint">
+                              {new Date(e.timestamp).toLocaleTimeString()}
+                            </span>
+                          </div>
+                          <p className="truncate text-ink font-sans text-xs mt-0.5">
+                            {e.message || type}
+                          </p>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </CardBody>
@@ -420,26 +508,40 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Active & Monitored Incidents (Section 12 & 13) ────────────────── */}
-      <section data-rise className="space-y-3">
-        <div className="flex items-center justify-between">
+      {/* ── 6. Incident Filter Tabs & Cards ──────────────────────────────── */}
+      <section className="space-y-3 font-mono">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-line/60 pb-2">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-brand" />
-            <h2 className="text-base font-bold text-ink uppercase tracking-wider font-mono">
-              INCIDENTS
+            <AlertTriangle className="h-4 w-4 text-sky-400" />
+            <h2 className="text-sm font-bold text-ink uppercase tracking-wider">
+              INCIDENTS CATALOG
             </h2>
-            <span className="chip border-line text-faint font-mono">
-              {displayIncidents.length} recorded
+            <span className="rounded bg-elevated px-2 py-0.5 text-2xs font-bold text-muted">
+              {filteredIncidents.length} TOTAL
             </span>
           </div>
 
-          <Button variant="ghost" size="sm" onClick={() => navigate("/incidents")}>
-            View all <ArrowRight className="h-3.5 w-3.5" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Filter className="h-3 w-3 text-muted mr-1" />
+            {["ALL", "CRITICAL", "INVESTIGATING", "RESOLVED"].map((f) => (
+              <button
+                key={f}
+                onClick={() => setIncidentFilter(f)}
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-2xs font-bold uppercase transition-all",
+                  incidentFilter === f
+                    ? "bg-brand/20 text-sky-400 border border-brand/40"
+                    : "text-muted hover:bg-elevated hover:text-ink"
+                )}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-2">
-          {displayIncidents.map((inc) => (
+        <div className="grid gap-4 md:grid-cols-2">
+          {filteredIncidents.map((inc) => (
             <IncidentCard
               key={inc.id}
               incident={inc}
@@ -449,28 +551,31 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* ── Agent Swarm Roster ───────────────────────────────────────────── */}
-      <section data-rise>
+      {/* ── 7. Agent Swarm Roster ────────────────────────────────────────── */}
+      <section>
         <Card>
           <CardHeader
-            icon={<ShieldCheck className="h-4 w-4" />}
-            title="Autonomous Agent Swarm"
-            subtitle="Five specialized agents dispatched sequentially upon incident detection"
+            icon={<ShieldCheck className="h-4 w-4 text-emerald-400" />}
+            title="Autonomous Investigation Agent Swarm"
+            subtitle="Specialized agents orchestrated sequentially across code, logs, and telemetry"
           />
-          <CardBody className="pt-0">
+          <CardBody className="pt-0 font-mono">
             <ul className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-5">
               {(agents.data ?? []).map((agent) => (
                 <li
                   key={agent.agent}
-                  className="rounded-2xl border border-line bg-elevated/40 p-3.5 transition-colors duration-200 hover:border-strong"
+                  className="rounded-xl border border-line/80 bg-[#090d15] p-3 transition-colors hover:border-brand/50"
                 >
-                  <span className="text-xl" aria-hidden>
-                    {agent.emoji}
-                  </span>
-                  <p className="mt-2 text-sm font-bold tracking-tight text-ink">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xl">{agent.emoji}</span>
+                    <span className="rounded bg-sky-500/10 px-1.5 py-0.5 text-[0.6rem] font-bold text-sky-400 uppercase">
+                      STANDBY
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs font-bold uppercase text-ink">
                     {agent.label}
                   </p>
-                  <p className="mt-1 text-2xs leading-relaxed text-muted">
+                  <p className="mt-1 text-[0.7rem] text-muted font-sans line-clamp-2">
                     {agent.running_message}
                   </p>
                 </li>

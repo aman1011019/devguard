@@ -8,6 +8,8 @@ import { SkeletonCard } from "@/components/ui/Skeleton";
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Incidents = lazy(() => import("@/pages/Incidents"));
 const Investigate = lazy(() => import("@/pages/Investigate"));
+const Services = lazy(() => import("@/pages/Services"));
+const Activity = lazy(() => import("@/pages/Activity"));
 const History = lazy(() => import("@/pages/History"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const Inspector = lazy(() => import("@/pages/Inspector"));
@@ -62,15 +64,23 @@ export function App() {
           }
         />
         <Route
-          path="history"
+          path="services"
           element={
             <Suspense fallback={<RouteFallback />}>
-              <History />
+              <Services />
             </Suspense>
           }
         />
         <Route
           path="activity"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <Activity />
+            </Suspense>
+          }
+        />
+        <Route
+          path="history"
           element={
             <Suspense fallback={<RouteFallback />}>
               <History />

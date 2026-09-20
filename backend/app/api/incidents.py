@@ -78,26 +78,69 @@ def list_incidents(db: Session = Depends(get_db)) -> list[IncidentSummary]:
     return [to_summary(r) for r in rows]
 
 
+from pydantic import BaseModel
+from typing import Optional
+
+
+class ManualIncidentCreate(BaseModel):
+    service: str = "Checkout API"
+    severity: str = "CRITICAL"
+    description: Optional[str] = "Manual incident reported"
+    repository: Optional[str] = "checkout-api"
+    branch: Optional[str] = "main"
+
+
 @router.post("", response_model=IncidentDetail)
 @router.post("/", response_model=IncidentDetail, include_in_schema=False)
 async def create_incident(
+    payload: Optional[ManualIncidentCreate] = None,
     db: Session = Depends(get_db),
 ) -> IncidentDetail:
-    """Create or inject demo incident (Section 27 REST API specification)."""
+    """Create a manual incident or inject demo incident."""
+    from app.realtime.event_bus import event_bus
     from app.services.incident_service import create_demo_incident
     from app.simulation.engine import simulation
-    incident = create_demo_incident(db)
-    simulation.break_service(incident.id)
-    db.refresh(incident)
+
+    if payload and payload.description and payload.description != "Manual incident reported":
+        incident = Incident(
+            service=payload.service,
+            title=payload.description[:200],
+            severity=payload.severity.upper(),
+            status=IncidentStatus.DETECTED.value,
+            error_rate=18.4,
+            latency_ms=3900.0,
+            requests_per_min="8.4K/min",
+            db_queries_per_request=22,
+            deployment_version="v1.8.4",
+            is_demo=False,
+        )
+        db.add(incident)
+        db.commit()
+        db.refresh(incident)
+    else:
+        incident = create_demo_incident(db)
+        simulation.break_service(incident.id)
+        db.refresh(incident)
+
     detail = to_detail(incident)
-    await ws_manager.broadcast_global({
-        "type": "incident_detected",
-        "event": "incident_detected",
+
+    event_payload = {
         "incident_id": incident.id,
         "service": incident.service,
         "title": incident.title,
         "severity": incident.severity,
         "status": incident.status,
+        "error_rate": incident.error_rate,
+        "latency_ms": incident.latency_ms,
+        "db_queries": incident.db_queries_per_request,
+        "deployment_version": incident.deployment_version,
+        "source": "Manual Report" if not incident.is_demo else "Demo Engine",
+    }
+    await event_bus.publish("incident_created", event_payload, incident_id=incident.id)
+    await ws_manager.broadcast_global({
+        "type": "incident_detected",
+        "event": "incident_detected",
+        **event_payload,
     })
     return detail
 

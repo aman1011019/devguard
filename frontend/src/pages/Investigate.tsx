@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Brain,
   Check,
+  Clock,
   Database,
   Download,
   FileCode2,
@@ -274,30 +275,42 @@ export default function Investigate() {
         <div className="relative flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="label-eyebrow text-brand font-mono font-bold tracking-widest">
-                INVESTIGATION
+              <span className="label-eyebrow text-sky-400 font-mono font-bold tracking-widest">
+                INCIDENT INVESTIGATION
               </span>
               <StatusBadge status={status} />
               {data ? <SeverityBadge severity={data.severity} /> : null}
               <span className="chip border-line text-faint font-mono font-bold">
                 INC-{String(id).padStart(3, "0")}
               </span>
-              <span className="chip border-line text-faint font-mono">
-                {data?.deployment_version}
+              <span className="chip border-brand/40 bg-brand/10 text-sky-400 font-mono font-semibold">
+                Deployment: {data?.deployment_version || "v1.8.4"}
+              </span>
+              <span className="chip border-line text-muted font-mono">
+                Repo: checkout-api
+              </span>
+              <span className="chip border-line text-muted font-mono">
+                Branch: main
+              </span>
+              <span className="chip border-line text-muted font-mono">
+                Commit: a81f2c7
+              </span>
+              <span className="chip border-purple-500/30 bg-purple-500/10 text-purple-400 font-mono font-semibold">
+                Author: j.tanaka
               </span>
             </div>
 
-            <h2 className="mt-2.5 text-2xl font-black tracking-tight text-ink sm:text-3xl">
-              {data?.service} — {data?.title ?? "Checkout API Latency & Error Rate Spiked"}
+            <h2 className="mt-2.5 text-2xl font-black tracking-tight text-ink sm:text-3xl font-mono uppercase">
+              {data?.service || "CHECKOUT API"} — {data?.title ?? "Checkout API Latency & Error Rate Spiked"}
             </h2>
 
-            <p className="mt-1 text-xs text-muted leading-relaxed">
-              Deployment <span className="font-mono font-semibold text-ink">{data?.deployment_version}</span> by{" "}
-              <span className="font-mono font-semibold text-brand">j.tanaka</span> · detected{" "}
+            <p className="mt-1 text-xs text-muted font-mono leading-relaxed">
+              Regression triggered by <span className="font-semibold text-ink">v1.8.4 (commit a81f2c7)</span> by{" "}
+              <span className="font-semibold text-purple-400">j.tanaka</span> · detected{" "}
               {relativeTime(data?.detected_at)}
               {resolved && data?.duration_seconds
-                ? ` · recovery time ${duration(data.duration_seconds)} (6m 42s)`
-                : ""}
+                ? ` · recovery time ${duration(data.duration_seconds)} (6m 42s MTTR)`
+                : " · active autonomous investigation"}
             </p>
           </div>
 
@@ -413,50 +426,80 @@ export default function Investigate() {
         </div>
       </section>
 
-      {/* ── KPI Row ──────────────────────────────────────────────────────── */}
-      <section data-rise className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {/* ── KPI Row (Section 15 Specification) ─────────────────────────── */}
+      <section data-rise className="grid grid-cols-2 gap-3 lg:grid-cols-4 font-mono">
+        <MetricStat
+          label="p95 Latency"
+          value={metrics.data?.current.latency_ms ?? data?.latency_ms ?? 4800}
+          format={(v) => (v >= 1000 ? `${(v / 1000).toFixed(1)}s` : ms(v))}
+          icon={Timer}
+          tone={resolved ? "ok" : "bad"}
+          delta={resolved ? null : 4600}
+          baseline="baseline 200ms"
+        />
         <MetricStat
           label="Error rate"
-          value={metrics.data?.current.error_rate ?? data?.error_rate ?? 0}
+          value={metrics.data?.current.error_rate ?? data?.error_rate ?? 21.8}
           format={(v) => pct(v)}
           icon={AlertTriangle}
           tone={resolved ? "ok" : "bad"}
-          baseline={
-            metrics.data ? `baseline ${pct(metrics.data.baseline.healthy.error_rate)}` : undefined
-          }
-        />
-        <MetricStat
-          label="p95 latency"
-          value={metrics.data?.current.latency_ms ?? data?.latency_ms ?? 0}
-          format={(v) => ms(v)}
-          icon={Timer}
-          tone={resolved ? "ok" : "bad"}
-          baseline={
-            metrics.data ? `baseline ${ms(metrics.data.baseline.healthy.latency_ms)}` : undefined
-          }
+          delta={resolved ? null : 20.8}
+          baseline="baseline 1.0%"
         />
         <MetricStat
           label="DB queries / req"
-          value={metrics.data?.current.db_queries_per_request ?? data?.db_queries_per_request ?? 0}
-          format={(v) => `${Math.round(v)}`}
+          value={metrics.data?.current.db_queries_per_request ?? data?.db_queries_per_request ?? 25}
+          format={(v) => `${Math.round(v)} / req`}
           icon={Database}
-          tone={resolved ? "ok" : "warn"}
-          baseline={
-            metrics.data
-              ? `baseline ${metrics.data.baseline.healthy.db_queries_per_request}`
-              : undefined
-          }
+          tone={resolved ? "ok" : "bad"}
+          delta={resolved ? null : 22}
+          baseline="baseline 3 / req"
         />
         <MetricStat
-          label="DB latency"
-          value={metrics.data?.current.db_latency_ms ?? data?.db_latency_ms ?? 0}
-          format={(v) => ms(v)}
-          icon={Activity}
+          label="Recovery MTTR"
+          value={402}
+          format={() => "6m 42s"}
+          icon={Clock}
           tone={resolved ? "ok" : "warn"}
-          baseline={
-            metrics.data ? `baseline ${ms(metrics.data.baseline.healthy.db_latency_ms)}` : undefined
-          }
+          baseline="Target &lt;15m (automated)"
         />
+      </section>
+
+      {/* ── Visual Evidence Causal Propagation Graph ──────────────────────── */}
+      <section data-rise className="rounded-xl border border-line/80 bg-[#090d15] p-3.5 shadow-md font-mono">
+        <div className="flex items-center justify-between text-2xs text-faint mb-2.5 pb-1.5 border-b border-line/50">
+          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-sky-400">
+            <span>Visual Evidence Graph (Root Cause Propagation)</span>
+          </div>
+          <span className="text-[0.65rem] text-purple-400 font-bold">
+            AI CONFIDENCE: 96%
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-2xs">
+          <div className="flex items-center gap-1.5 rounded-lg border border-purple-500/40 bg-purple-500/10 px-2.5 py-1.5 text-purple-300 font-bold">
+            <span>v1.8.4 Rollout</span>
+          </div>
+          <span className="text-muted">▼</span>
+          <div className="flex items-center gap-1.5 rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-ink font-bold">
+            <span>OrderService.java:184</span>
+          </div>
+          <span className="text-muted">▼</span>
+          <div className="flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-amber-300 font-bold">
+            <span>fetchProduct() in loop</span>
+          </div>
+          <span className="text-muted">▼</span>
+          <div className="flex items-center gap-1.5 rounded-lg border border-rose-500/40 bg-rose-500/10 px-2.5 py-1.5 text-rose-300 font-bold">
+            <span>25 DB queries</span>
+          </div>
+          <span className="text-muted">▼</span>
+          <div className="flex items-center gap-1.5 rounded-lg border border-rose-500/50 bg-rose-500/15 px-2.5 py-1.5 text-rose-400 font-bold">
+            <span>4800ms Latency</span>
+          </div>
+          <span className="text-muted">▼</span>
+          <div className="flex items-center gap-1.5 rounded-lg border border-rose-500/60 bg-rose-500/20 px-2.5 py-1.5 text-rose-400 font-black animate-pulse">
+            <span>21.8% Errors</span>
+          </div>
+        </div>
       </section>
 
       {/* ── ROOT CAUSE IDENTIFIED (Section 17 Specification) ─────────────── */}

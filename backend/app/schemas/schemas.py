@@ -13,14 +13,21 @@ class ORMModel(BaseModel):
 
 # ── Health ───────────────────────────────────────────────────────────────────
 class HealthResponse(BaseModel):
-    status: str = "ok"
+    status: str = "healthy"
     app: str = "DevGuard"
-    version: str = "1.0.0"
+    version: str = "2.0.0"
+    database: str = "connected"
+    websocket: str = "available"
+    github: str = "demo"
+    llm: str = "demo"
     demo_mode: bool = True
     ai_provider: str = "demo"
     ai_enabled: bool = False
-    services_monitored: int = 12
-    active_incidents: int = 0
+    services_monitored: int = 5
+    active_incidents: int = 1
+    critical_services: int = 1
+    investigating: int = 1
+    resolved_today: int = 7
     system_health: float = 99.8
 
 

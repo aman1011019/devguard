@@ -2,10 +2,9 @@ import { useCallback, useEffect, useRef } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { GridBackdrop } from "@/components/fx/Backdrop";
-import { useGlobalSocket } from "@/hooks/useSocket";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import { useNotifications } from "@/providers/NotificationProvider";
 import { pageIntro } from "@/lib/motion";
-import type { WsEvent } from "@/lib/events";
 import { MobileNav } from "./MobileNav";
 import { RedLightBanner } from "./RedLightBanner";
 import { Sidebar } from "./Sidebar";
@@ -13,8 +12,8 @@ import { TopBar } from "./TopBar";
 
 /**
  * App frame: desktop rail + sticky header + bottom nav, and the single global
- * WebSocket subscription (channel 0). Detection and reset arrive here no matter
- * which screen is open, which is what makes the demo feel like one system.
+ * WebSocket subscription (system channel). Events arrive here no matter
+ * which screen is open, making the system truly real-time across tabs.
  */
 export function AppShell() {
   const { pathname } = useLocation();
@@ -23,28 +22,36 @@ export function AppShell() {
   const mainRef = useRef<HTMLElement>(null);
 
   const onGlobalEvent = useCallback(
-    (event: WsEvent) => {
-      if (event.type === "incident_detected") {
+    (event: any) => {
+      const type = event.type || event.event;
+      if (type === "incident_detected" || type === "incident_created") {
         void qc.invalidateQueries();
         notify({
           tone: "bad",
-          title: `Incident detected — ${(event as any).service ?? "service"}`,
-          body: (event as any).title ?? "Investigate to dispatch the agent swarm.",
+          title: `Incident detected — ${event.service ?? event.detail?.service ?? "Checkout API"}`,
+          body: event.title ?? event.detail?.title ?? "Investigate to dispatch the agent swarm.",
           ttl: 7000,
         });
-      } else if (event.type === "system_reset") {
+      } else if (type === "system_reset") {
         void qc.invalidateQueries();
         notify({
           tone: "ok",
           title: "System reset",
           body: "All services returned to the healthy baseline.",
         });
+      } else if (type === "service_healthy" || type === "incident_resolved") {
+        void qc.invalidateQueries();
+        notify({
+          tone: "ok",
+          title: "Incident Resolved",
+          body: `${event.service ?? "Service"} metrics normalized. All test suites passed.`,
+        });
       }
     },
     [notify, qc]
   );
 
-  const { status } = useGlobalSocket(onGlobalEvent);
+  useWebSocket("system", onGlobalEvent);
 
   // Route changes get a staggered entrance; scroll returns to the top so a deep
   // page never opens half-way down.
@@ -59,7 +66,7 @@ export function AppShell() {
       <GridBackdrop />
       <Sidebar />
       <div className="lg:pl-[15.5rem]">
-        <TopBar socketStatus={status} />
+        <TopBar />
         <RedLightBanner />
         <main
           ref={mainRef}
