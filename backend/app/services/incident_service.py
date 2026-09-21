@@ -195,7 +195,7 @@ def seed_historical(db: Session) -> None:
             detected_at=detected,
             resolved_at=detected + timedelta(seconds=r["duration"]),
             duration_seconds=r["duration"],
-            is_demo=True,
+            is_demo=False,
         )
         db.add(inc)
     db.commit()

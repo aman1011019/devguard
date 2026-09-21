@@ -23,66 +23,48 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 const readChoice = (): ThemeChoice => {
-  if (typeof localStorage === "undefined") return "system";
-  const raw = localStorage.getItem(STORAGE_KEY);
-  return raw === "light" || raw === "dark" || raw === "system" ? raw : "system";
+  return "light";
 };
 
-const systemDark = () =>
-  typeof window !== "undefined" &&
-  window.matchMedia?.("(prefers-color-scheme: dark)").matches === true;
-
-function apply(resolved: "light" | "dark", choice: ThemeChoice) {
+function apply() {
   const root = document.documentElement;
-  root.classList.toggle("dark", resolved === "dark");
-  root.dataset.theme = choice;
-  root.style.colorScheme = resolved;
-  // Keeps the Android status bar and iOS notch in step with the surface colour.
-  const color = resolved === "dark" ? "#05070d" : "#f5f7fc";
+  root.classList.remove("dark");
+  root.classList.add("light");
+  root.dataset.theme = "light";
+  root.style.colorScheme = "light";
+  const color = "#f8fafc";
   document
     .querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')
     .forEach((m) => m.setAttribute("content", color));
 }
 
 /**
- * Light/dark/system theming. The pre-paint script in `index.html` has already
- * set the correct class before React mounts, so there is never a flash of the
- * wrong palette — this provider only keeps it in sync afterwards.
+ * Pure light mode theme provider. Ensures DevGuard renders with a crisp,
+ * modern enterprise light palette across all routes and devices.
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [choice, setChoiceState] = useState<ThemeChoice>(readChoice);
-  const [prefersDark, setPrefersDark] = useState(systemDark);
+  const [choice] = useState<ThemeChoice>("light");
 
   useEffect(() => {
-    const mql = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => setPrefersDark(mql.matches);
-    mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
-  }, []);
-
-  const resolved: "light" | "dark" =
-    choice === "system" ? (prefersDark ? "dark" : "light") : choice;
-
-  useEffect(() => {
-    apply(resolved, choice);
-  }, [resolved, choice]);
-
-  const setChoice = useCallback((next: ThemeChoice) => {
-    setChoiceState(next);
+    apply();
     try {
-      localStorage.setItem(STORAGE_KEY, next);
+      localStorage.setItem(STORAGE_KEY, "light");
     } catch {
-      /* private mode — theme just won't persist */
+      /* private mode */
     }
   }, []);
 
+  const setChoice = useCallback((_next: ThemeChoice) => {
+    apply();
+  }, []);
+
   const toggle = useCallback(() => {
-    setChoice(resolved === "dark" ? "light" : "dark");
-  }, [resolved, setChoice]);
+    apply();
+  }, []);
 
   const value = useMemo(
-    () => ({ choice, resolved, setChoice, toggle }),
-    [choice, resolved, setChoice, toggle]
+    () => ({ choice: "light" as ThemeChoice, resolved: "light" as const, setChoice, toggle }),
+    [setChoice, toggle]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

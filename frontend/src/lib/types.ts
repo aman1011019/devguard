@@ -193,6 +193,10 @@ export const IncidentSummary = z.object({
   root_cause_summary: z.string().nullable().optional(),
   confidence: z.number().nullable().optional(),
   deployment_version: z.string(),
+  repository: z.string().nullable().optional(),
+  branch: z.string().nullable().optional(),
+  commit_sha: z.string().nullable().optional(),
+  author: z.string().nullable().optional(),
   detected_at: z.string(),
   resolved_at: z.string().nullable().optional(),
   duration_seconds: z.number().nullable().optional(),
@@ -249,6 +253,16 @@ export const ActionResponse = z.object({
   incident_id: z.number().nullable().optional(),
 });
 export type ActionResponse = z.infer<typeof ActionResponse>;
+
+export const InvestigationLaunchResponse = z.object({
+  success: z.boolean().default(true),
+  ok: z.boolean().default(true),
+  investigation_id: z.union([z.string(), z.number()]).transform((v) => String(v)),
+  incident_id: z.number(),
+  status: z.string().default("started"),
+  message: z.string().default(""),
+});
+export type InvestigationLaunchResponse = z.infer<typeof InvestigationLaunchResponse>;
 
 export const VoiceResponse = z.object({
   intent: z.string(),
@@ -326,17 +340,23 @@ export type CodebaseScan = z.infer<typeof CodebaseScan>;
 /** GET returns the demo timings too; PUT echoes back only the mutable fields,
  *  so the timing keys are optional on purpose. */
 export const UserSettings = z.object({
-  theme: z.string(),
-  demo_mode: z.boolean(),
+  theme: z.string().optional(),
+  demo_mode: z.boolean().optional(),
   ai_provider: z.string(),
-  ai_enabled: z.boolean(),
+  ai_enabled: z.boolean().optional(),
+  llm_base_url: z.string().optional(),
+  model_name: z.string().optional(),
+  has_api_key: z.boolean().optional(),
   agent_step_seconds: z.number().optional(),
   test_step_seconds: z.number().optional(),
 });
 export type UserSettings = z.infer<typeof UserSettings>;
 
 export type UserSettingsInput = {
-  theme: string;
-  demo_mode: boolean;
+  theme?: string;
+  demo_mode?: boolean;
   ai_provider: string;
+  llm_api_key?: string;
+  llm_base_url?: string;
+  model_name?: string;
 };

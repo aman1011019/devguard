@@ -58,7 +58,13 @@ class Incident(Base):
     duration_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
-    is_demo: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Real Codebase & Git connection fields
+    repository: Mapped[Optional[str]] = mapped_column(String(240), nullable=True)
+    branch: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    commit_sha: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    author: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Relationships
     evidence: Mapped[list["Evidence"]] = relationship(
@@ -236,3 +242,24 @@ class TimelineEvent(Base):
     order_index: Mapped[int] = mapped_column(Integer, default=0)
 
     incident: Mapped[Incident] = relationship(back_populates="timeline")
+ 
+ 
+class Repository(Base):
+    __tablename__ = "repositories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    owner: Mapped[str] = mapped_column(String(120), index=True)
+    name: Mapped[str] = mapped_column(String(120), index=True)
+    full_name: Mapped[str] = mapped_column(String(240), unique=True, index=True)
+    url: Mapped[str] = mapped_column(String(300))
+    default_branch: Mapped[str] = mapped_column(String(120), default="main")
+    private: Mapped[bool] = mapped_column(Boolean, default=False)
+    description: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    stars_count: Mapped[int] = mapped_column(Integer, default=0)
+    forks_count: Mapped[int] = mapped_column(Integer, default=0)
+    open_issues_count: Mapped[int] = mapped_column(Integer, default=0)
+    language: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    last_commit_sha: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    last_commit_message: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    last_synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    connected_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)

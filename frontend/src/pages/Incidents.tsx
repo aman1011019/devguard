@@ -4,17 +4,22 @@ import {
   AlertTriangle,
   ArrowRight,
   Filter,
-  RotateCcw,
   ShieldCheck,
   Siren,
   Zap,
+  GitBranch,
+  PlusCircle,
 } from "lucide-react";
 import { SeverityBadge, StatusBadge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { EmptyState, ErrorState } from "@/components/ui/States";
 import { SkeletonCard } from "@/components/ui/Skeleton";
-import { useDemoActions, useIncidents } from "@/hooks/useQueries";
+import { ReportIncidentModal } from "@/components/modals/ReportIncidentModal";
+import { ConnectCodebaseModal } from "@/components/modals/ConnectCodebaseModal";
+import { useIncidents } from "@/hooks/useQueries";
+import { api } from "@/lib/api";
+import { setActiveCodebase } from "@/store/realtimeStore";
 import type { IncidentSummary } from "@/lib/types";
 import { cn, ms, pct, relativeTime } from "@/lib/utils";
 
@@ -38,8 +43,9 @@ const FILTERS: { key: Scope; label: string }[] = [
 export default function Incidents() {
   const navigate = useNavigate();
   const incidents = useIncidents();
-  const demo = useDemoActions();
   const [scope, setScope] = useState<Scope>("all");
+  const [reportOpen, setReportOpen] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(false);
 
   const rows = useMemo(() => {
     const all = incidents.data ?? [];
@@ -48,7 +54,10 @@ export default function Incidents() {
     return all;
   }, [incidents.data, scope]);
 
-  const activeCount = (incidents.data ?? []).filter((i) => ACTIVE.has(i.status)).length;
+  const activeCount = useMemo(
+    () => (incidents.data ?? []).filter((i) => ACTIVE.has(i.status)).length,
+    [incidents.data]
+  );
 
   return (
     <div className="space-y-5">
@@ -78,23 +87,17 @@ export default function Incidents() {
           </div>
           <div className="flex flex-wrap items-center gap-2.5">
             <Button
-              icon={<Zap className="h-4 w-4" />}
-              loading={demo.inject.isPending}
-              onClick={() =>
-                demo.inject.mutate(undefined, {
-                  onSuccess: (created) => navigate(`/incidents/${created.id}`),
-                })
-              }
+              icon={<GitBranch className="h-4 w-4" />}
+              onClick={() => setConnectOpen(true)}
             >
-              Inject incident
+              Connect Codebase
             </Button>
             <Button
-              variant="outline"
-              icon={<RotateCcw className="h-4 w-4" />}
-              loading={demo.reset.isPending}
-              onClick={() => demo.reset.mutate()}
+              variant="secondary"
+              icon={<PlusCircle className="h-4 w-4" />}
+              onClick={() => setReportOpen(true)}
             >
-              Reset
+              Report incident
             </Button>
           </div>
         </div>
@@ -137,7 +140,7 @@ export default function Incidents() {
               <EmptyState
                 icon={<ShieldCheck className="h-5 w-5" />}
                 title={scope === "resolved" ? "No resolved incidents yet" : "No incidents"}
-                body="Inject the demo failure to create one and watch DevGuard investigate."
+                body="Connect a repository or scan your codebase to discover regressions, or report an incident."
               />
             ) : (
               <ul className="grid gap-3 md:grid-cols-2">
@@ -149,6 +152,9 @@ export default function Incidents() {
           </CardBody>
         </Card>
       </section>
+
+      <ReportIncidentModal isOpen={reportOpen} onClose={() => setReportOpen(false)} />
+      <ConnectCodebaseModal open={connectOpen} onClose={() => setConnectOpen(false)} />
     </div>
   );
 }

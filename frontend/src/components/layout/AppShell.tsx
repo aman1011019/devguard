@@ -65,7 +65,7 @@ export function AppShell() {
     <div className="relative min-h-screen">
       <GridBackdrop />
       <Sidebar />
-      <div className="lg:pl-[15.5rem]">
+      <div className="lg:pl-60">
         <TopBar />
         <RedLightBanner />
         <main

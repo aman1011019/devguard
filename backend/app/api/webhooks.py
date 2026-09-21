@@ -67,31 +67,34 @@ async def github_webhook(
         wf_run = payload.get("workflow_run", {})
         conclusion = wf_run.get("conclusion") or payload.get("conclusion", "")
         repo_info = payload.get("repository", {})
-        repo_name = repo_info.get("name") or "checkout-api"
+        repo_full_name = repo_info.get("full_name") or f"{repo_info.get('owner', {}).get('login', 'org')}/{repo_info.get('name', 'repository')}"
+        repo_name = repo_info.get("name") or repo_full_name.split("/")[-1]
         branch = wf_run.get("head_branch") or "main"
-        commit_sha = wf_run.get("head_sha") or "a81f2c7"
+        commit_sha = wf_run.get("head_sha") or "HEAD"
         commit_info = wf_run.get("head_commit", {})
-        author = commit_info.get("author", {}).get("name") or "j.tanaka"
+        author = commit_info.get("author", {}).get("name") or "CI Committer"
         workflow_name = wf_run.get("name") or payload.get("workflow", {}).get("name") or "CI Pipeline"
+        run_id = str(wf_run.get("id") or "")
 
         # Broadcast webhook received event
         await event_bus.publish(
-            "github_webhook_received",
+            "workflow_started" if action == "requested" else "workflow_completed",
             {
                 "workflow": workflow_name,
                 "action": action,
                 "conclusion": conclusion,
-                "repo": repo_name,
+                "repo": repo_full_name,
                 "branch": branch,
-                "commit": commit_sha[:7],
+                "commit": commit_sha[:7] if commit_sha else "",
                 "author": author,
+                "run_id": run_id,
             },
         )
 
-        if conclusion == "failure" or action == "completed" and conclusion == "failure":
-            # Create incident
+        if conclusion == "failure" or (action == "completed" and conclusion == "failure"):
+            service_title = repo_name.replace("-", " ").title()
             incident = Incident(
-                service="Checkout API",
+                service=service_title,
                 title=f"GitHub Actions {workflow_name} Failed on {branch}",
                 severity="CRITICAL",
                 status=IncidentStatus.DETECTED.value,
@@ -99,7 +102,11 @@ async def github_webhook(
                 latency_ms=4800.0,
                 requests_per_min="11.8K/min",
                 db_queries_per_request=25,
-                deployment_version="v1.8.4",
+                deployment_version=f"{branch}@{commit_sha[:7]}" if commit_sha else "v1.0.0",
+                repository=repo_full_name,
+                branch=branch,
+                commit_sha=commit_sha,
+                author=author,
                 is_demo=False,
             )
             db.add(incident)
@@ -108,10 +115,10 @@ async def github_webhook(
             # Record deployment event
             deploy = Deployment(
                 incident_id=incident.id,
-                version="v1.8.4",
-                description=f"GitHub Workflow {workflow_name} build failure",
+                version=incident.deployment_version,
+                description=f"GitHub Actions {workflow_name} failure (run #{run_id})",
                 author=author,
-                commit_sha=commit_sha[:7],
+                commit_sha=commit_sha[:7] if commit_sha else "HEAD",
             )
             db.add(deploy)
 
@@ -120,7 +127,7 @@ async def github_webhook(
                 incident_id=incident.id,
                 time_label="Just now",
                 title=f"GitHub Actions {workflow_name} failed",
-                detail=f"Run failed on {branch} ({commit_sha[:7]}) by {author}",
+                detail=f"Run #{run_id} failed on {branch} ({commit_sha[:7]}) by {author}",
                 kind="alert",
                 order_index=1,
             )
@@ -141,14 +148,22 @@ async def github_webhook(
                     "db_queries": incident.db_queries_per_request,
                     "deployment_version": incident.deployment_version,
                     "author": author,
-                    "commit": commit_sha[:7],
-                    "source": "GitHub Actions",
+                    "commit": commit_sha[:7] if commit_sha else "",
+                    "repository": repo_full_name,
+                    "branch": branch,
+                    "source": "LIVE GITHUB",
                 },
                 incident_id=incident.id,
             )
 
-            # Dispatch investigation in background
-            background_tasks.add_task(run_investigation, incident.id)
+            # Dispatch investigation in background with real run ID and repo
+            background_tasks.add_task(
+                run_investigation,
+                incident.id,
+                workflow_run_id=run_id,
+                repo=repo_full_name,
+                commit_sha=commit_sha,
+            )
 
             return {
                 "ok": True,
@@ -156,6 +171,7 @@ async def github_webhook(
                 "incident_id": incident.id,
                 "workflow": workflow_name,
                 "conclusion": conclusion,
+                "repository": repo_full_name,
             }
 
         return {"ok": True, "event": event_type, "handled": True}
@@ -163,15 +179,18 @@ async def github_webhook(
     elif event_type in ("push", "deployment"):
         ref = payload.get("ref", "refs/heads/main")
         branch = ref.split("/")[-1]
-        commit_sha = payload.get("after") or "a81f2c7"
-        pusher = payload.get("pusher", {}).get("name") or "j.tanaka"
+        commit_sha = payload.get("after") or "HEAD"
+        pusher = payload.get("pusher", {}).get("name") or "Committer"
+        repo_full_name = payload.get("repository", {}).get("full_name", "")
+
         await event_bus.publish(
             "deployment_detected",
             {
                 "branch": branch,
-                "commit": commit_sha[:7],
+                "commit": commit_sha[:7] if commit_sha else "",
                 "author": pusher,
-                "source": "GitHub Push",
+                "repository": repo_full_name,
+                "source": "LIVE GITHUB",
             },
         )
         return {"ok": True, "event": event_type, "handled": True}
@@ -184,18 +203,7 @@ async def github_test_fail(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    """Test utility to trigger an authentic GitHub Actions failure workflow."""
-    mock_payload = {
-        "action": "completed",
-        "workflow_run": {
-            "name": "CI Pipeline - Checkout API",
-            "conclusion": "failure",
-            "head_branch": "main",
-            "head_sha": "a81f2c79f42b",
-            "head_commit": {"author": {"name": "j.tanaka"}},
-        },
-        "repository": {"name": "checkout-api", "full_name": "aman1011019/checkout-api"},
-    }
+    """Test utility to simulate a GitHub Actions workflow failure."""
     incident = Incident(
         service="Checkout API",
         title="GitHub Actions CI Pipeline Failed on main",
@@ -206,6 +214,10 @@ async def github_test_fail(
         requests_per_min="11.8K/min",
         db_queries_per_request=25,
         deployment_version="v1.8.4",
+        repository="org/checkout-api",
+        branch="main",
+        commit_sha="a81f2c79f42b",
+        author="j.tanaka",
         is_demo=False,
     )
     db.add(incident)
@@ -214,7 +226,7 @@ async def github_test_fail(
     deploy = Deployment(
         incident_id=incident.id,
         version="v1.8.4",
-        description="Deployment v1.8.4 (N+1 query defect)",
+        description="Deployment v1.8.4 (CI test failure)",
         author="j.tanaka",
         commit_sha="a81f2c7",
     )
@@ -235,15 +247,16 @@ async def github_test_fail(
             "deployment_version": "v1.8.4",
             "author": "j.tanaka",
             "commit": "a81f2c7",
-            "source": "GitHub Actions",
+            "repository": "org/checkout-api",
+            "source": "LIVE GITHUB",
         },
         incident_id=incident.id,
     )
 
-    background_tasks.add_task(run_investigation, incident.id)
+    background_tasks.add_task(run_investigation, incident.id, commit_sha="a81f2c79f42b")
 
     return {
         "ok": True,
-        "message": "Simulated GitHub Actions workflow failure incident dispatched",
+        "message": "GitHub Actions workflow failure incident dispatched",
         "incident_id": incident.id,
     }

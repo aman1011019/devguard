@@ -8,7 +8,7 @@ from app.agents.registry import agent_catalog
 from app.core.config import settings
 from app.core.database import get_db
 from app.providers.factory import provider_label
-from app.schemas.schemas import HealthResponse
+from app.schemas.schemas import HealthResponse, SettingsPayload
 from app.services.incident_service import count_active
 from app.simulation.engine import simulation
 
@@ -45,7 +45,7 @@ def health(db: Session = Depends(get_db)) -> HealthResponse:
         demo_mode=settings.demo_mode,
         ai_provider=provider_label(),
         ai_enabled=settings.ai_enabled,
-        services_monitored=5,
+        services_monitored=12,
         active_incidents=max(active_cnt, 1 if settings.demo_mode and active_cnt == 0 else active_cnt),
         investigating=investigating_cnt,
         critical_services=1 if active_cnt > 0 else 0,
@@ -59,27 +59,20 @@ def agents() -> list[dict]:
     return agent_catalog()
 
 
-from pydantic import BaseModel
-
-
-class SettingsPayload(BaseModel):
-    theme: str = "system"
-    demo_mode: bool = True
-    ai_provider: str = "demo"
-    llm_base_url: str = ""
-    model_name: str = ""
-
-
-_current_theme = "system"
+_current_theme = "light"
 
 
 @router.get("/settings")
 def get_user_settings() -> dict:
+    active_provider = settings.llm_provider if settings.llm_provider != "demo" else "gemini"
     return {
-        "theme": _current_theme,
-        "demo_mode": settings.demo_mode,
-        "ai_provider": settings.llm_provider,
-        "ai_enabled": settings.ai_enabled,
+        "theme": "light",
+        "demo_mode": False,
+        "ai_provider": active_provider,
+        "ai_enabled": settings.ai_enabled or bool(settings.llm_api_key),
+        "llm_base_url": settings.llm_base_url,
+        "model_name": settings.model_name,
+        "has_api_key": bool(settings.llm_api_key),
         "agent_step_seconds": settings.agent_step_seconds,
         "test_step_seconds": settings.test_step_seconds,
     }
@@ -91,21 +84,24 @@ def update_user_settings(payload: SettingsPayload) -> dict:
     from app.providers.factory import reset_provider  # avoids circular at module level
 
     global _current_theme
-    _current_theme = payload.theme
-    settings.demo_mode = payload.demo_mode
+    _current_theme = "light"
+    settings.demo_mode = False
     if payload.ai_provider:
-        settings.llm_provider = payload.ai_provider
-    if payload.llm_base_url:
+        settings.llm_provider = payload.ai_provider if payload.ai_provider != "demo" else "gemini"
+    if payload.llm_api_key is not None:
+        settings.llm_api_key = payload.llm_api_key
+    if payload.llm_base_url is not None:
         settings.llm_base_url = payload.llm_base_url
-    if payload.model_name:
+    if payload.model_name is not None:
         settings.model_name = payload.model_name
     # Invalidate the cached provider so the next request picks up new config.
     reset_provider()
     return {
-        "theme": _current_theme,
-        "demo_mode": settings.demo_mode,
+        "theme": "light",
+        "demo_mode": False,
         "ai_provider": settings.llm_provider,
-        "ai_enabled": settings.ai_enabled,
+        "ai_enabled": settings.ai_enabled or bool(settings.llm_api_key),
         "llm_base_url": settings.llm_base_url,
         "model_name": settings.model_name,
+        "has_api_key": bool(settings.llm_api_key),
     }

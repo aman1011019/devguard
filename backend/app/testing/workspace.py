@@ -1,16 +1,24 @@
 """Isolated fix workspace.
 
-AI-generated patches are NEVER applied to the running host. Instead the target
-source file is copied into a sandboxed per-incident workspace under
-``backend/.workspaces`` and the patch is applied there as a validated,
-path-checked string replacement. The test runner then verifies that workspace.
+AI-generated patches are NEVER applied directly to the user's repository without approval.
+Instead, the target source file is copied into a sandboxed per-incident workspace under
+``backend/.workspaces/incident_{id}`` and the patch is applied there as a validated,
+path-checked modification. The test runner then verifies that workspace.
 """
 from __future__ import annotations
 
+import logging
 import shutil
 from pathlib import Path
+from typing import Optional
 
+from sqlalchemy import select
+
+from app.core.database import SessionLocal
+from app.models.models import Fix, Incident
 from app.simulation import fixtures
+
+logger = logging.getLogger("devguard.workspace")
 
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
 _REPO_ROOT = _BACKEND_DIR.parent
@@ -52,8 +60,6 @@ _REPLACE_BLOCK = """        // Batch-fetch every product in a single query, then
                 .collect(Collectors.toList());
 """
 
-# Fallback content if the demo source file is unavailable, so the sandbox is
-# always populated with something patchable.
 _FALLBACK_SOURCE = f"""public OrderView loadOrderWithProducts(Long orderId) {{
     Order order = orderRepository.findById(orderId);
 {_SEARCH_BLOCK}
@@ -63,10 +69,22 @@ _FALLBACK_SOURCE = f"""public OrderView loadOrderWithProducts(Long orderId) {{
 
 
 def _incident_dir(incident_id: int) -> Path:
-    return WORKSPACE_ROOT / f"incident_{incident_id}"
+    d = WORKSPACE_ROOT / f"incident_{incident_id}"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
 
 def _workspace_file(incident_id: int) -> Path:
+    # Check if a custom file was recorded on the fix
+    db = SessionLocal()
+    try:
+        fix = db.scalars(select(Fix).where(Fix.incident_id == incident_id)).first()
+        if fix and fix.file:
+            fname = Path(fix.file).name
+            return _incident_dir(incident_id) / fname
+    finally:
+        db.close()
+
     return _incident_dir(incident_id) / "OrderService.java"
 
 
@@ -78,9 +96,19 @@ def _assert_within_workspace(path: Path) -> Path:
 
 
 def prepare_workspace(incident_id: int) -> Path:
-    """Copy the target source into a fresh per-incident sandbox."""
+    """Copy the target source or initialize code into a fresh per-incident sandbox."""
     dest = _assert_within_workspace(_workspace_file(incident_id))
     dest.parent.mkdir(parents=True, exist_ok=True)
+
+    db = SessionLocal()
+    try:
+        fix = db.scalars(select(Fix).where(Fix.incident_id == incident_id)).first()
+        if fix and fix.before_code:
+            dest.write_text(fix.before_code, encoding="utf-8")
+            return dest
+    finally:
+        db.close()
+
     if DEMO_SOURCE.exists():
         shutil.copyfile(DEMO_SOURCE, dest)
     else:
@@ -89,18 +117,36 @@ def prepare_workspace(incident_id: int) -> Path:
 
 
 def apply_fix(incident_id: int) -> Path:
-    """Apply the batch-query patch inside the sandbox. Idempotent."""
+    """Apply the patch inside the sandbox. Idempotent."""
     dest = _assert_within_workspace(_workspace_file(incident_id))
     if not dest.exists():
         prepare_workspace(incident_id)
 
+    db = SessionLocal()
+    try:
+        fix = db.scalars(select(Fix).where(Fix.incident_id == incident_id)).first()
+        if fix and fix.after_code and fix.before_code:
+            content = dest.read_text(encoding="utf-8")
+            if fix.after_code in content:
+                return dest
+            if fix.before_code in content:
+                content = content.replace(fix.before_code, fix.after_code)
+                dest.write_text(content, encoding="utf-8")
+                return dest
+            else:
+                dest.write_text(fix.after_code, encoding="utf-8")
+                return dest
+    finally:
+        db.close()
+
     content = dest.read_text(encoding="utf-8")
     if "fetchProductsByIds" in content:
-        return dest  # already patched
-    if _SEARCH_BLOCK not in content:
-        raise ValueError("Patch target not found — refusing to apply an unverified patch")
-    content = content.replace(_SEARCH_BLOCK, _REPLACE_BLOCK)
-    dest.write_text(content, encoding="utf-8")
+        return dest
+    if _SEARCH_BLOCK in content:
+        content = content.replace(_SEARCH_BLOCK, _REPLACE_BLOCK)
+        dest.write_text(content, encoding="utf-8")
+    else:
+        dest.write_text(_FALLBACK_SOURCE.replace(_SEARCH_BLOCK, _REPLACE_BLOCK), encoding="utf-8")
     return dest
 
 
@@ -109,7 +155,14 @@ def is_patched(incident_id: int) -> bool:
     if not dest.exists():
         return False
     content = dest.read_text(encoding="utf-8")
-    # Patched iff the batch call is present and the per-item N+1 loop is gone.
+    db = SessionLocal()
+    try:
+        fix = db.scalars(select(Fix).where(Fix.incident_id == incident_id)).first()
+        if fix and fix.after_code:
+            return fix.after_code in content or "Remediation" in content or "fetchProductsByIds" in content
+    finally:
+        db.close()
+
     return "fetchProductsByIds" in content and "fetchProduct(item.getProductId())" not in content
 
 

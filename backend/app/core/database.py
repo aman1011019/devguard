@@ -57,3 +57,23 @@ def init_db() -> None:
     from app.models import models  # noqa: F401  (register mappers)
 
     Base.metadata.create_all(bind=engine)
+
+    # Auto-migrate SQLite schema if new columns are added to Incident
+    if settings.database_url.startswith("sqlite"):
+        with engine.connect() as conn:
+            from sqlalchemy import text
+            res = conn.execute(text("PRAGMA table_info(incidents)"))
+            cols = {row[1] for row in res.fetchall()}
+            for col_name, col_type in [
+                ("repository", "VARCHAR(240)"),
+                ("branch", "VARCHAR(120)"),
+                ("commit_sha", "VARCHAR(64)"),
+                ("author", "VARCHAR(120)"),
+                ("is_demo", "BOOLEAN DEFAULT 0"),
+            ]:
+                if col_name not in cols:
+                    try:
+                        conn.execute(text(f"ALTER TABLE incidents ADD COLUMN {col_name} {col_type}"))
+                        conn.commit()
+                    except Exception:
+                        pass

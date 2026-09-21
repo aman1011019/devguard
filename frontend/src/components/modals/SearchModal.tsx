@@ -169,6 +169,47 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
               </div>
             </div>
           )}
+
+          {results?.code?.length > 0 && (
+            <div>
+              <p className="text-2xs uppercase tracking-wider text-faint mb-2">Code Files &amp; Symbols</p>
+              <div className="space-y-1">
+                {results.code.map((c: any, idx: number) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between p-2 rounded-lg bg-elevated/40 border border-line/60"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-3.5 w-3.5 text-sky-400" />
+                      <span className="text-ink font-semibold">{c.symbol || c.path}</span>
+                      {c.symbol && <span className="text-muted text-2xs">in {c.path}</span>}
+                    </div>
+                    <span className="text-2xs text-faint uppercase font-mono">{c.language || c.type}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {results?.logs?.length > 0 && (
+            <div>
+              <p className="text-2xs uppercase tracking-wider text-faint mb-2">Real-Time Event Logs</p>
+              <div className="space-y-1">
+                {results.logs.map((l: any, idx: number) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between p-2 rounded-lg bg-elevated/40 border border-line/60 text-2xs"
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="text-brand font-bold shrink-0">{l.event_id}</span>
+                      <span className="text-muted truncate">{l.message}</span>
+                    </div>
+                    <span className="text-faint font-mono shrink-0 ml-2">{l.event}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

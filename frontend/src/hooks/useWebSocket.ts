@@ -91,10 +91,12 @@ export function useWebSocket(
       };
     };
 
+    const BACKOFF_DELAYS = [1000, 2000, 4000, 8000, 16000];
+
     const scheduleReconnect = () => {
       realtimeStore.setConnectionStatus("RECONNECTING");
+      const delay = BACKOFF_DELAYS[Math.min(retryCountRef.current, BACKOFF_DELAYS.length - 1)];
       retryCountRef.current += 1;
-      const delay = Math.min(1000 * Math.pow(1.5, retryCountRef.current), 10000);
       timerRef.current = window.setTimeout(() => {
         if (aliveRef.current) {
           connect();

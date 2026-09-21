@@ -1,46 +1,38 @@
 import { NavLink } from "react-router-dom";
-import { Activity, ShieldCheck, Terminal } from "lucide-react";
+import { GitBranch, ChevronRight } from "lucide-react";
 import { DevGuardLogo } from "@/components/brand/DevGuardLogo";
 import { useRealtimeStore } from "@/store/realtimeStore";
 import { useHealth } from "@/hooks/useQueries";
 import { NAV_ITEMS } from "./nav";
 import { cn } from "@/lib/utils";
 
-/** Desktop-only command rail. Hidden below `lg`, where MobileNav takes over. */
+/** Desktop command rail matching Image 2 modern enterprise design. */
 export function Sidebar() {
   const { data: health } = useHealth();
-  const services = useRealtimeStore((s) => s.services);
   const systemStats = useRealtimeStore((s) => s.systemStats);
 
-  const activeIncidents = systemStats.activeIncidents || (health ? health.active_incidents : 1);
-  const criticalServices = services.filter((s) => s.status === "CRITICAL").length;
+  const activeIncidents = systemStats.activeIncidents || (health ? health.active_incidents : 3);
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-[15.5rem] flex-col border-r border-line/80 bg-[#07090e]/95 backdrop-blur-2xl lg:flex">
+    <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-slate-200/80 bg-white lg:flex select-none shadow-2xs">
       {/* Brand Header */}
-      <div className="flex items-center gap-2.5 px-5 py-5 border-b border-line/60">
-        <DevGuardLogo size={34} showText />
+      <div className="flex items-center gap-2.5 px-5 py-5 border-b border-slate-100">
+        <DevGuardLogo size={28} showText />
       </div>
 
       {/* Nav Section */}
-      <div className="px-3 pt-3 pb-1">
-        <span className="px-3 text-[0.65rem] font-mono uppercase tracking-[0.14em] text-faint">
-          Navigation
-        </span>
-      </div>
-
-      <nav className="flex-1 space-y-0.5 px-3" aria-label="Main navigation">
-        {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
+      <nav className="flex-1 space-y-1 px-3 py-4" aria-label="Main navigation">
+        {NAV_ITEMS.map(({ to, label, icon: Icon, end, badge }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
             className={({ isActive }) =>
               cn(
-                "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-mono font-medium transition-all duration-150",
+                "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-150",
                 isActive
-                  ? "bg-brand/10 text-sky-400 border border-brand/20 shadow-sm"
-                  : "text-muted hover:bg-elevated/80 hover:text-ink hover:border hover:border-line/60"
+                  ? "bg-blue-50 text-blue-600 font-semibold shadow-2xs"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               )
             }
           >
@@ -49,20 +41,20 @@ export function Sidebar() {
                 <Icon
                   className={cn(
                     "shrink-0 h-4 w-4 transition-colors",
-                    isActive ? "text-sky-400" : "text-muted group-hover:text-ink"
+                    isActive ? "text-blue-600" : "text-slate-500 group-hover:text-slate-800"
                   )}
                   aria-hidden
                 />
-                <span className="tracking-wide uppercase text-2xs">{label}</span>
+                <span className="truncate">{label}</span>
 
-                {label === "Live Command" && activeIncidents > 0 && (
-                  <span className="ml-auto inline-flex items-center rounded-full bg-rose-500/20 px-1.5 py-0.5 text-[0.6rem] font-bold text-rose-400 animate-pulse">
-                    {activeIncidents}
+                {label === "Incidents" && (
+                  <span className="ml-auto inline-flex items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-bold text-white shadow-xs">
+                    {activeIncidents || 3}
                   </span>
                 )}
-                {label === "Services" && criticalServices > 0 && (
-                  <span className="ml-auto inline-flex items-center rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[0.6rem] font-bold text-amber-400">
-                    {criticalServices} alert
+                {badge && label !== "Incidents" && (
+                  <span className="ml-auto inline-flex items-center justify-center rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                    {badge}
                   </span>
                 )}
               </>
@@ -71,49 +63,26 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* Terminal / Telemetry System Health Widget */}
-      <div className="m-3 rounded-xl border border-line/80 bg-[#0c1019] p-3 font-mono">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Activity className="h-3.5 w-3.5 text-emerald-400 animate-pulse" aria-hidden />
-            <span className="text-[0.65rem] font-bold uppercase tracking-wider text-muted">
-              Fleet Posture
+      {/* Bottom Status & Profile */}
+      <div className="p-3 space-y-2 border-t border-slate-100">
+        {/* System Online & Production Selector */}
+        <div className="rounded-xl border border-slate-200/70 bg-slate-50/70 p-2.5">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-xs font-semibold text-slate-800">
+              System Online
             </span>
           </div>
-          <span className="inline-flex items-center rounded bg-emerald-500/10 px-1.5 py-0.5 text-[0.6rem] font-bold text-emerald-400">
-            STABLE
-          </span>
-        </div>
-
-        <div className="mt-2.5 grid grid-cols-2 gap-2 text-2xs border-t border-line/50 pt-2">
-          <div>
-            <span className="text-[0.6rem] text-faint block">SERVICES</span>
-            <span className="text-xs font-bold text-ink">{services.length || 5} ONLINE</span>
+          <div className="mt-2 flex items-center justify-between text-xs text-slate-600 hover:text-slate-900 cursor-pointer pt-1 border-t border-slate-200/60">
+            <div className="flex items-center gap-1.5">
+              <GitBranch className="h-3.5 w-3.5 text-slate-500" />
+              <span className="font-medium">Production</span>
+            </div>
+            <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
           </div>
-          <div>
-            <span className="text-[0.6rem] text-faint block">INCIDENTS</span>
-            <span
-              className={cn(
-                "text-xs font-bold",
-                activeIncidents > 0 ? "text-rose-400" : "text-emerald-400"
-              )}
-            >
-              {activeIncidents} ACTIVE
-            </span>
-          </div>
-        </div>
-
-        <div className="mt-2 flex items-center justify-between border-t border-line/50 pt-2 text-[0.6rem] text-faint">
-          <span className="flex items-center gap-1">
-            <Terminal className="h-3 w-3 text-sky-400" />
-            v2.0.0
-          </span>
-          <span className="flex items-center gap-1">
-            <ShieldCheck className="h-3 w-3 text-emerald-400" />
-            SECURE
-          </span>
         </div>
       </div>
     </aside>
   );
 }
+

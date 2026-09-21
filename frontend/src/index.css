@@ -3,52 +3,29 @@
 @tailwind utilities;
 
 @layer base {
-  /* ── LIGHT: bright, high-clarity control room ─────────────────────────── */
-  :root {
+  /* ── Pure Light Enterprise Theme ───────────────────────────────────────── */
+  :root,
+  .dark {
     --c-canvas: 245 247 252;
     --c-surface: 255 255 255;
     --c-elevated: 255 255 255;
     --c-overlay: 12 18 32;
-    --c-line: 223 229 241;
-    --c-strong: 197 208 226;
-    --c-ink: 11 18 32;
-    --c-muted: 90 105 130;
-    --c-faint: 138 151 172;
-    --c-brand: 79 70 229;
-    --c-brand-ink: 109 40 217;
-    --c-brand-soft: 238 238 255;
-    --c-accent: 8 145 178;
-    --c-ok: 5 150 105;
-    --c-warn: 202 111 6;
-    --c-bad: 225 29 72;
+    --c-line: 226 232 240;
+    --c-strong: 203 213 225;
+    --c-ink: 15 23 42;
+    --c-muted: 100 116 139;
+    --c-faint: 148 163 184;
+    --c-brand: 37 99 235;
+    --c-brand-ink: 29 78 216;
+    --c-brand-soft: 239 246 255;
+    --c-accent: 14 165 233;
+    --c-ok: 16 185 129;
+    --c-warn: 245 158 11;
+    --c-bad: 239 68 68;
     --c-info: 37 99 235;
     --c-shadow: 15 23 42;
     --c-hilite: 255 255 255;
-    color-scheme: light;
-  }
-
-  /* ── DARK: deep-space command center, independently tuned ─────────────── */
-  .dark {
-    --c-canvas: 5 7 13;
-    --c-surface: 11 16 27;
-    --c-elevated: 18 25 40;
-    --c-overlay: 2 3 8;
-    --c-line: 32 43 64;
-    --c-strong: 51 66 94;
-    --c-ink: 231 237 251;
-    --c-muted: 141 156 184;
-    --c-faint: 103 117 145;
-    --c-brand: 129 124 255;
-    --c-brand-ink: 167 139 250;
-    --c-brand-soft: 27 28 60;
-    --c-accent: 34 211 238;
-    --c-ok: 16 185 129;
-    --c-warn: 245 158 11;
-    --c-bad: 251 84 113;
-    --c-info: 96 165 250;
-    --c-shadow: 0 0 0;
-    --c-hilite: 255 255 255;
-    color-scheme: dark;
+    color-scheme: light !important;
   }
 
   * {

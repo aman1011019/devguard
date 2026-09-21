@@ -23,17 +23,33 @@ class Settings(BaseSettings):
 
     # ── AI provider ──────────────────────────────────────────────────────────
     # One of: demo | gemini | openai | ollama
-    llm_provider: str = "demo"
+    llm_provider: str = "auto"
     llm_api_key: str = ""
     model_name: str = ""
     llm_base_url: str = ""  # OpenAI-compatible base URL / Ollama host
-    demo_mode: bool = True
+    demo_mode: bool = False
 
     # ── Office Kit bridge ────────────────────────────────────────────────────
     office_kit_url: str = ""
 
     # ── HTTP / CORS ──────────────────────────────────────────────────────────
     cors_origins: str = "*"
+
+    # ── GitHub Integration ───────────────────────────────────────────────────
+    github_token: str = ""
+    github_client_id: str = ""
+    github_client_secret: str = ""
+    github_api_url: str = "https://api.github.com"
+    github_webhook_secret: str = ""
+    github_default_repo: str = ""
+
+    # ── Telemetry / Prometheus ───────────────────────────────────────────────
+    prometheus_url: str = ""
+
+    # ── Codebase & ZIP Security Limits ───────────────────────────────────────
+    max_upload_mb: int = 100
+    max_extracted_mb: int = 500
+    max_files: int = 10000
 
     # ── Demo timing (seconds) — tuned so the investigation feels alive but the
     #    end-to-end demo stays under ~15s. Override for slower/faster runs. ────

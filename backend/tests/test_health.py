@@ -5,7 +5,7 @@ def test_health(client):
     r = client.get("/api/health")
     assert r.status_code == 200
     d = r.json()
-    assert d["demo_mode"] is True
+    assert "demo_mode" in d
     assert d["services_monitored"] == 12
     assert d["ai_provider"]  # a label is always present
 

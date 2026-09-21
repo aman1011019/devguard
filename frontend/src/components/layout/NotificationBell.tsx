@@ -81,7 +81,7 @@ export function NotificationBell() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.99 }}
             transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-            className="glass absolute right-0 top-11 z-50 w-[min(20rem,calc(100vw-2rem))] origin-top-right overflow-hidden rounded-2xl shadow-lift"
+            className="glass absolute right-0 top-11 z-50 w-[min(20rem,calc(100vw-2rem))] origin-top-right overflow-hidden rounded-2xl border border-line shadow-lift"
           >
             <div className="flex items-center justify-between border-b border-line px-3.5 py-2.5">
               <p className="text-xs font-semibold uppercase tracking-[0.1em] text-faint">Activity</p>

@@ -29,7 +29,7 @@ import { AgentPipeline } from "@/components/incident/AgentPipeline";
 import { DiffViewer } from "@/components/incident/DiffViewer";
 import { EvidenceChain } from "@/components/incident/EvidenceChain";
 import { VerificationPipeline } from "@/components/incident/VerificationPipeline";
-import { Badge, SeverityBadge, StatusBadge } from "@/components/ui/Badge";
+import { Badge, SeverityBadge, StatusBadge, DataSourceBadge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Progress } from "@/components/ui/Progress";
@@ -43,7 +43,6 @@ import {
   refreshIncident,
   useActiveIncident,
   useAgents,
-  useDemoActions,
   useEvidence,
   useIncident,
   useIncidentActions,
@@ -69,13 +68,9 @@ const LOG_TONE: Record<string, string> = {
 
 export default function Investigate() {
   const params = useParams();
-  const [searchParams] = useSearchParams();
-  const isDemoRun = searchParams.get("demo_run") === "true";
-
   const navigate = useNavigate();
   const qc = useQueryClient();
   const active = useActiveIncident();
-  const demo = useDemoActions();
 
   const routeId = params.id ? Number(params.id) : null;
   const id = routeId !== null && !Number.isNaN(routeId) ? routeId : (active.data?.id ?? null);
@@ -155,34 +150,6 @@ export default function Investigate() {
     });
   }, [rootCause?.id, rootCause?.confidence]);
 
-  // Automated Demo flow runner (Section 47 specification)
-  useEffect(() => {
-    if (!isDemoRun || !id) return;
-
-    // Step A: Start investigation if detected
-    if (status === "DETECTED") {
-      const timer = setTimeout(() => {
-        actions.investigate.mutate();
-      }, 600);
-      return () => clearTimeout(timer);
-    }
-
-    // Step B: Auto approve and verify once fix is ready
-    if (status === "FIX_READY" && fix && fix.status === "PROPOSED") {
-      const timer = setTimeout(() => {
-        actions.approveFix.mutate(undefined, {
-          onSuccess: () => {
-            setTab("verify");
-            setTimeout(() => {
-              actions.runTests.mutate();
-            }, 800);
-          },
-        });
-      }, 2400); // 2.4s pause to appreciate the root cause and proposed fix
-      return () => clearTimeout(timer);
-    }
-  }, [isDemoRun, id, status, fix, actions]);
-
   // Empty / loading states
   if (id === null) {
     return (
@@ -191,18 +158,13 @@ export default function Investigate() {
           <EmptyState
             icon={<Radar className="h-5 w-5" />}
             title="No incident to investigate"
-            body="Everything is currently healthy. Run the flagship demo to start an incident investigation."
+            body="All monitored services are operating normally. Connect a repository or scan your codebase to discover and investigate potential regressions."
             action={
               <Button
                 icon={<Zap className="h-4 w-4" />}
-                loading={demo.inject.isPending}
-                onClick={() =>
-                  demo.inject.mutate(undefined, {
-                    onSuccess: (created) => navigate(`/incidents/${created.id}?demo_run=true`),
-                  })
-                }
+                onClick={() => navigate("/")}
               >
-                RUN DEMO INCIDENT
+                RETURN TO COMMAND CENTER
               </Button>
             }
           />
@@ -253,63 +215,71 @@ export default function Investigate() {
 
   return (
     <div className="space-y-4">
-      {/* ── Automated Demo Mode Indicator ─────────────────────────────────── */}
-      {isDemoRun && !resolved && (
-        <div className="flex items-center justify-between rounded-xl border border-brand/40 bg-brand/10 px-4 py-2 text-xs text-brand font-medium">
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-brand animate-ping" />
-            <span className="font-mono font-bold uppercase tracking-wider">
-              DEMO RUNNER ACTIVE
-            </span>
-            <span className="text-muted hidden sm:inline">
-              — Automating end-to-end incident investigation and verification
-            </span>
-          </div>
-          <span className="font-mono text-2xs text-muted">Section 47 Specification</span>
-        </div>
-      )}
-
       {/* ── Investigation Hero Header (Section 15 Specification) ─────────── */}
       <section data-rise className="panel relative overflow-hidden p-5 sm:p-6">
         <div className="grid-backdrop pointer-events-none absolute inset-0 opacity-60" aria-hidden />
         <div className="relative flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="label-eyebrow text-sky-400 font-mono font-bold tracking-widest">
+              <span className="label-eyebrow text-blue-600 font-mono font-bold tracking-widest">
                 INCIDENT INVESTIGATION
               </span>
               <StatusBadge status={status} />
               {data ? <SeverityBadge severity={data.severity} /> : null}
-              <span className="chip border-line text-faint font-mono font-bold">
+              <DataSourceBadge
+                source={
+                  (data as any)?.is_real
+                    ? (data as any)?.source === "zip"
+                      ? "UPLOADED ZIP"
+                      : "LIVE GITHUB"
+                    : (data as any)?.source === "telemetry"
+                    ? "LIVE TELEMETRY"
+                    : "DEMO ENGINE"
+                }
+              />
+              <span className="chip border-line text-slate-500 font-mono font-bold">
                 INC-{String(id).padStart(3, "0")}
               </span>
-              <span className="chip border-brand/40 bg-brand/10 text-sky-400 font-mono font-semibold">
-                Deployment: {data?.deployment_version || "v1.8.4"}
-              </span>
-              <span className="chip border-line text-muted font-mono">
-                Repo: checkout-api
-              </span>
-              <span className="chip border-line text-muted font-mono">
-                Branch: main
-              </span>
-              <span className="chip border-line text-muted font-mono">
-                Commit: a81f2c7
-              </span>
-              <span className="chip border-purple-500/30 bg-purple-500/10 text-purple-400 font-mono font-semibold">
-                Author: j.tanaka
-              </span>
+              {(data?.repository || (data as any)?.repo) && (
+                <span className="chip border-line bg-slate-50 text-slate-700 font-mono font-semibold">
+                  Repo: {data?.repository || (data as any)?.repo}
+                </span>
+              )}
+              {data?.deployment_version && (
+                <span className="chip border-blue-200 bg-blue-50 text-blue-700 font-mono font-semibold">
+                  Deployment: {data.deployment_version}
+                </span>
+              )}
+              {(data as any)?.branch && (
+                <span className="chip border-line text-slate-600 font-mono">
+                  Branch: {(data as any).branch}
+                </span>
+              )}
+              {(data as any)?.commit_sha && (
+                <span className="chip border-line text-slate-600 font-mono">
+                  Commit: {(data as any).commit_sha.slice(0, 7)}
+                </span>
+              )}
+              {(data as any)?.author && (
+                <span className="chip border-purple-200 bg-purple-50 text-purple-700 font-mono font-semibold">
+                  Author: {(data as any).author}
+                </span>
+              )}
             </div>
 
-            <h2 className="mt-2.5 text-2xl font-black tracking-tight text-ink sm:text-3xl font-mono uppercase">
+            <h2 className="mt-2.5 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl font-mono uppercase">
               {data?.service || "CHECKOUT API"} — {data?.title ?? "Checkout API Latency & Error Rate Spiked"}
             </h2>
 
-            <p className="mt-1 text-xs text-muted font-mono leading-relaxed">
-              Regression triggered by <span className="font-semibold text-ink">v1.8.4 (commit a81f2c7)</span> by{" "}
-              <span className="font-semibold text-purple-400">j.tanaka</span> · detected{" "}
+            <p className="mt-1 text-xs text-slate-500 font-mono leading-relaxed">
+              Regression on <span className="font-semibold text-slate-900">{data?.service || "monitored service"}</span>
+              {(data as any)?.deployment_version ? ` · deployment ${data?.deployment_version}` : ""}
+              {(data as any)?.commit_sha ? <> (commit <span className="font-semibold text-slate-900">{(data as any).commit_sha.slice(0, 7)}</span>)</> : ""}
+              {(data as any)?.author ? <> by <span className="font-semibold text-purple-700">{(data as any).author}</span></> : ""}
+              {" · detected "}
               {relativeTime(data?.detected_at)}
               {resolved && data?.duration_seconds
-                ? ` · recovery time ${duration(data.duration_seconds)} (6m 42s MTTR)`
+                ? ` · recovery time ${duration(data.duration_seconds)}`
                 : " · active autonomous investigation"}
             </p>
           </div>
@@ -418,8 +388,8 @@ export default function Investigate() {
               >
                 VIEW INCIDENT REPORT
               </Button>
-              <Button variant="outline" onClick={() => demo.reset.mutate()} loading={demo.reset.isPending}>
-                <RotateCcw className="h-4 w-4 mr-1.5" /> Reset demo
+              <Button variant="outline" onClick={() => navigate("/")}>
+                <RotateCcw className="h-4 w-4 mr-1.5" /> Back to Dashboard
               </Button>
             </div>
           ) : null}
@@ -466,37 +436,37 @@ export default function Investigate() {
       </section>
 
       {/* ── Visual Evidence Causal Propagation Graph ──────────────────────── */}
-      <section data-rise className="rounded-xl border border-line/80 bg-[#090d15] p-3.5 shadow-md font-mono">
-        <div className="flex items-center justify-between text-2xs text-faint mb-2.5 pb-1.5 border-b border-line/50">
-          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-sky-400">
+      <section data-rise className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs font-mono">
+        <div className="flex items-center justify-between text-2xs text-slate-400 mb-2.5 pb-1.5 border-b border-slate-100">
+          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-blue-600">
             <span>Visual Evidence Graph (Root Cause Propagation)</span>
           </div>
-          <span className="text-[0.65rem] text-purple-400 font-bold">
+          <span className="text-[0.65rem] text-purple-700 font-bold">
             AI CONFIDENCE: 96%
           </span>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2 text-2xs">
-          <div className="flex items-center gap-1.5 rounded-lg border border-purple-500/40 bg-purple-500/10 px-2.5 py-1.5 text-purple-300 font-bold">
+          <div className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1.5 text-purple-700 font-bold">
             <span>v1.8.4 Rollout</span>
           </div>
-          <span className="text-muted">▼</span>
-          <div className="flex items-center gap-1.5 rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-ink font-bold">
+          <span className="text-slate-400">▼</span>
+          <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-slate-800 font-bold">
             <span>OrderService.java:184</span>
           </div>
-          <span className="text-muted">▼</span>
-          <div className="flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-amber-300 font-bold">
+          <span className="text-slate-400">▼</span>
+          <div className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-amber-800 font-bold">
             <span>fetchProduct() in loop</span>
           </div>
-          <span className="text-muted">▼</span>
-          <div className="flex items-center gap-1.5 rounded-lg border border-rose-500/40 bg-rose-500/10 px-2.5 py-1.5 text-rose-300 font-bold">
+          <span className="text-slate-400">▼</span>
+          <div className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-rose-700 font-bold">
             <span>25 DB queries</span>
           </div>
-          <span className="text-muted">▼</span>
-          <div className="flex items-center gap-1.5 rounded-lg border border-rose-500/50 bg-rose-500/15 px-2.5 py-1.5 text-rose-400 font-bold">
+          <span className="text-slate-400">▼</span>
+          <div className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-rose-700 font-bold">
             <span>4800ms Latency</span>
           </div>
-          <span className="text-muted">▼</span>
-          <div className="flex items-center gap-1.5 rounded-lg border border-rose-500/60 bg-rose-500/20 px-2.5 py-1.5 text-rose-400 font-black animate-pulse">
+          <span className="text-slate-400">▼</span>
+          <div className="flex items-center gap-1.5 rounded-lg border border-rose-300 bg-rose-100/70 px-2.5 py-1.5 text-rose-800 font-black animate-pulse">
             <span>21.8% Errors</span>
           </div>
         </div>
@@ -755,7 +725,39 @@ export default function Investigate() {
                         Replace per-item sequential database queries with a single batch fetch.
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        icon={<Download className="h-3.5 w-3.5" />}
+                        onClick={() => {
+                          const blob = new Blob([fix.diff], { type: "text/plain;charset=utf-8" });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement("a");
+                          a.href = url;
+                          a.download = `fix-${fix.file.replace(/[/\\?%*:|"<>]/g, "_")}.patch`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        }}
+                      >
+                        DOWNLOAD .PATCH
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        icon={<FileCode2 className="h-3.5 w-3.5" />}
+                        onClick={async () => {
+                          try {
+                            await api.applyIncidentPatch(id);
+                            await incident.refetch();
+                            await investigation.refetch();
+                          } catch (err) {
+                            console.error(err);
+                          }
+                        }}
+                      >
+                        APPLY TO WORKSPACE
+                      </Button>
                       <Badge tone={fix.status === "APPROVED" || fix.status === "APPLIED" ? "ok" : "brand"}>
                         {fix.status}
                       </Badge>
@@ -862,10 +864,9 @@ export default function Investigate() {
               <Button
                 size="sm"
                 icon={<RotateCcw className="h-4 w-4" />}
-                onClick={() => demo.reset.mutate()}
-                loading={demo.reset.isPending}
+                onClick={() => navigate("/")}
               >
-                Reset demo
+                Return to Dashboard
               </Button>
             </div>
           </div>

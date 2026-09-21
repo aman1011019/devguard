@@ -44,3 +44,9 @@ def provider_label() -> str:
     if settings.demo_mode:
         return "demo"
     return (settings.llm_provider or "demo").lower()
+
+
+def reset_provider() -> None:
+    """Reset any cached provider state."""
+    pass
+

@@ -3,8 +3,8 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { SkeletonCard } from "@/components/ui/Skeleton";
 
-/** Route-level code splitting: the dashboard is the only screen on the critical
- *  path, so the chart/scanner-heavy screens load on demand. */
+/** Route-level code splitting: pages load on demand. */
+const Home = lazy(() => import("@/pages/Home"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Incidents = lazy(() => import("@/pages/Incidents"));
 const Investigate = lazy(() => import("@/pages/Investigate"));
@@ -31,14 +31,28 @@ export function App() {
   return (
     <Routes>
       <Route element={<AppShell />}>
+        {/* Home Overview Page */}
         <Route
           index
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <Home />
+            </Suspense>
+          }
+        />
+
+        {/* Command Center */}
+        <Route
+          path="dashboard"
           element={
             <Suspense fallback={<RouteFallback />}>
               <Dashboard />
             </Suspense>
           }
         />
+        <Route path="command" element={<Navigate to="/dashboard" replace />} />
+
+        {/* Incidents & Investigation */}
         <Route
           path="incidents"
           element={
@@ -63,6 +77,8 @@ export function App() {
             </Suspense>
           }
         />
+
+        {/* Services & Monitoring */}
         <Route
           path="services"
           element={
@@ -88,6 +104,14 @@ export function App() {
           }
         />
         <Route
+          path="reports"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <History />
+            </Suspense>
+          }
+        />
+        <Route
           path="settings"
           element={
             <Suspense fallback={<RouteFallback />}>
@@ -103,7 +127,16 @@ export function App() {
             </Suspense>
           }
         />
-        <Route path="dashboard" element={<Navigate to="/" replace />} />
+        <Route
+          path="repositories"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <Inspector />
+            </Suspense>
+          }
+        />
+
+        {/* 404 Fallback */}
         <Route
           path="*"
           element={

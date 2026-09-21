@@ -74,6 +74,51 @@ async def search_all(
         s for s in core_services if q.lower() in s["name"].lower() or q.lower() in s["id"].lower()
     ]
 
+    # Search Active Codebase files & symbols
+    from app.api.codebase import _ACTIVE_CODE_INDEX
+    matched_code = []
+    if _ACTIVE_CODE_INDEX:
+        files = _ACTIVE_CODE_INDEX.get("files", [])
+        for f in files:
+            file_path = f.get("path", "")
+            if q.lower() in file_path.lower():
+                matched_code.append({
+                    "type": "file",
+                    "path": file_path,
+                    "language": f.get("language", ""),
+                    "lines": f.get("lines", 0),
+                })
+            for sym in f.get("functions", []) + f.get("classes", []):
+                if q.lower() in sym.lower():
+                    matched_code.append({
+                        "type": "symbol",
+                        "symbol": sym,
+                        "path": file_path,
+                        "language": f.get("language", ""),
+                    })
+            if len(matched_code) >= 6:
+                break
+
+    # Search Recent Events and Logs
+    from app.realtime.event_store import event_store
+    matched_logs = []
+    try:
+        events = event_store.get_events(limit=50)
+        for ev in events:
+            ev_str = str(ev.get("message") or ev.get("content") or ev.get("payload") or ev.get("event") or "")
+            if q.lower() in ev_str.lower():
+                matched_logs.append({
+                    "event_id": ev.get("event_id"),
+                    "timestamp": ev.get("timestamp"),
+                    "event": ev.get("event"),
+                    "message": ev.get("message") or str(ev.get("payload", ""))[:120],
+                    "incident_id": ev.get("incident_id"),
+                })
+            if len(matched_logs) >= 6:
+                break
+    except Exception:
+        pass
+
     return {
         "query": q,
         "results": {
@@ -109,5 +154,8 @@ async def search_all(
                 }
                 for ev in evidence_items
             ],
+            "code": matched_code[:6],
+            "logs": matched_logs[:6],
         },
     }
+

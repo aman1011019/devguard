@@ -44,6 +44,27 @@ async def inject_incident(db: Session = Depends(get_db)) -> IncidentDetail:
     else:
         # Ensure the controlled service is in its broken state.
         simulation.break_service(incident.id)
+        # If evidence was cleared, re-populate fixtures
+        from app.models.models import Evidence
+        from sqlalchemy import func
+        ev_count = db.scalar(select(func.count(Evidence.id)).where(Evidence.incident_id == incident.id))
+        if not ev_count:
+            for ev in fixtures.EVIDENCE:
+                db.add(
+                    Evidence(
+                        incident_id=incident.id,
+                        key=ev["key"],
+                        type=ev["type"],
+                        source=ev["source"],
+                        agent=ev["agent"],
+                        timestamp=ev["timestamp"],
+                        relevance=ev["relevance"],
+                        title=ev["title"],
+                        content=ev["content"],
+                        meta=ev.get("meta", {}),
+                    )
+                )
+            db.commit()
 
     db.refresh(incident)
     detail = to_detail(incident)

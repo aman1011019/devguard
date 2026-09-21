@@ -86,3 +86,43 @@ export function SeverityBadge({ severity, className }: { severity: string; class
     </Badge>
   );
 }
+
+export function DataSourceBadge({ source, className }: { source?: string; className?: string }) {
+  const label = source || "DEMO ENGINE";
+  const isGithub = label === "LIVE GITHUB";
+  const isZip = label === "UPLOADED ZIP";
+  const isTele = label === "LIVE TELEMETRY" || label === "LIVE PROMETHEUS";
+  const isWs = label === "LIVE WEBSOCKET";
+  const isLocal = label === "LOCAL WORKSPACE";
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-3xs font-mono font-bold uppercase tracking-wider",
+        isGithub
+          ? "border border-sky-300 bg-sky-50 text-sky-700"
+          : isZip
+          ? "border border-purple-300 bg-purple-50 text-purple-700"
+          : isTele
+          ? "border border-emerald-300 bg-emerald-50 text-emerald-700"
+          : isWs
+          ? "border border-cyan-300 bg-cyan-50 text-cyan-700"
+          : isLocal
+          ? "border border-amber-300 bg-amber-50 text-amber-800"
+          : "border border-slate-200 bg-slate-50 text-slate-600",
+        className
+      )}
+    >
+      <span
+        className={cn(
+          "h-1.5 w-1.5 rounded-full",
+          isGithub || isZip || isTele || isWs || isLocal
+            ? "bg-current animate-pulse"
+            : "bg-faint"
+        )}
+      />
+      {label}
+    </span>
+  );
+}
+

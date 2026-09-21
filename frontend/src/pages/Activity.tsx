@@ -16,6 +16,13 @@ import {
 import { useRealtimeStore, clearEvents, type ActivityEvent } from "@/store/realtimeStore";
 import { cn } from "@/lib/utils";
 
+const formatTime = (ts: string) => {
+  if (!ts) return "—";
+  if (ts.includes(":") && !ts.includes("T") && !ts.includes("-")) return ts;
+  const d = new Date(ts);
+  return isNaN(d.getTime()) ? ts : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+};
+
 export default function ActivityPage() {
   const events = useRealtimeStore((s) => s.activityEvents);
   const connectionStatus = useRealtimeStore((s) => s.connectionStatus);
@@ -48,15 +55,15 @@ export default function ActivityPage() {
   return (
     <div className="space-y-4 font-mono">
       {/* Top Banner */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-line/60 pb-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <Terminal className="h-5 w-5 text-sky-400" />
-            <h1 className="text-xl font-bold uppercase tracking-tight text-ink">
+            <Terminal className="h-5 w-5 text-blue-600" />
+            <h1 className="text-xl font-bold uppercase tracking-tight text-slate-900">
               System Activity & Event Bus Stream
             </h1>
           </div>
-          <p className="text-xs text-muted mt-0.5 font-sans">
+          <p className="text-xs text-slate-500 mt-0.5 font-sans">
             Real-time event log published across DevGuard agents, telemetry collectors, and GitHub webhooks.
           </p>
         </div>
@@ -67,8 +74,8 @@ export default function ActivityPage() {
             className={cn(
               "flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-2xs font-bold uppercase",
               connectionStatus === "LIVE"
-                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                : "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-amber-200 bg-amber-50 text-amber-700"
             )}
           >
             <Radio className="h-3 w-3 animate-pulse" />
@@ -80,8 +87,8 @@ export default function ActivityPage() {
             className={cn(
               "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-2xs font-bold uppercase transition-colors",
               isPaused
-                ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
-                : "border-line bg-elevated text-muted hover:text-ink"
+                ? "border-amber-300 bg-amber-50 text-amber-700"
+                : "border-slate-200 bg-slate-100/70 text-slate-700 hover:bg-slate-200/70"
             )}
           >
             {isPaused ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
@@ -90,7 +97,7 @@ export default function ActivityPage() {
 
           <button
             onClick={clearEvents}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-elevated px-2.5 py-1 text-2xs text-muted hover:text-rose-400 hover:border-rose-500/30 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-100/70 px-2.5 py-1 text-2xs text-slate-700 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200 transition-colors"
             title="Clear buffer"
           >
             <Trash2 className="h-3 w-3" />
@@ -101,7 +108,7 @@ export default function ActivityPage() {
 
       {/* Filter Tabs */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-2xs">
-        <Filter className="h-3.5 w-3.5 text-muted shrink-0 mr-1" />
+        <Filter className="h-3.5 w-3.5 text-slate-400 shrink-0 mr-1" />
         {["ALL", "INCIDENT", "METRIC", "AGENT", "LOG", "DEPLOY"].map((f) => (
           <button
             key={f}
@@ -109,40 +116,40 @@ export default function ActivityPage() {
             className={cn(
               "rounded-md px-3 py-1 font-bold uppercase tracking-wider transition-all",
               filter === f
-                ? "bg-brand/20 text-sky-400 border border-brand/40 shadow-sm"
-                : "text-muted hover:bg-elevated hover:text-ink"
+                ? "bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs"
+                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
             )}
           >
             {f}
           </button>
         ))}
-        <span className="ml-auto text-2xs text-faint">
+        <span className="ml-auto text-2xs text-slate-400">
           Showing {filteredEvents.length} events
         </span>
       </div>
 
       {/* Event Stream Terminal Window */}
-      <div className="rounded-xl border border-line/80 bg-[#070a10] shadow-2xl overflow-hidden">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         {/* Terminal Titlebar */}
-        <div className="flex items-center justify-between border-b border-line/60 bg-[#0d121c] px-4 py-2.5 text-2xs">
+        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/90 px-4 py-2.5 text-2xs">
           <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-red-500/80" />
-            <span className="h-2.5 w-2.5 rounded-full bg-yellow-500/80" />
-            <span className="h-2.5 w-2.5 rounded-full bg-green-500/80" />
-            <span className="ml-2 font-bold text-muted uppercase tracking-wider">
+            <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
+            <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+            <span className="ml-2 font-bold text-slate-600 uppercase tracking-wider">
               /dev/events/system-stream
             </span>
           </div>
-          <span className="text-faint text-[0.65rem]">
+          <span className="text-slate-400 text-[0.65rem]">
             AUTO-SCROLL: {isPaused ? "OFF" : "ON"}
           </span>
         </div>
 
         {/* Event List */}
-        <div className="max-h-[680px] overflow-y-auto divide-y divide-line/30 p-2 text-xs">
+        <div className="max-h-[680px] overflow-y-auto divide-y divide-slate-100 p-2 text-xs">
           {filteredEvents.length === 0 ? (
-            <div className="py-12 text-center text-muted">
-              <Activity className="mx-auto h-8 w-8 text-faint animate-pulse" />
+            <div className="py-12 text-center text-slate-400">
+              <Activity className="mx-auto h-8 w-8 text-slate-300 animate-pulse" />
               <p className="mt-2 text-xs">Listening for real-time events on WebSocket bus...</p>
             </div>
           ) : (
@@ -156,7 +163,7 @@ export default function ActivityPage() {
               return (
                 <div
                   key={evt.event_id}
-                  className="rounded-lg p-2.5 transition-colors hover:bg-white/[0.02]"
+                  className="rounded-lg p-2.5 transition-colors hover:bg-slate-50/80"
                 >
                   <div
                     onClick={() => setExpandedId(isExpanded ? null : evt.event_id)}
@@ -164,13 +171,13 @@ export default function ActivityPage() {
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       {isExpanded ? (
-                        <ChevronDown className="h-3.5 w-3.5 text-muted shrink-0" />
+                        <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                       ) : (
-                        <ChevronRight className="h-3.5 w-3.5 text-muted shrink-0" />
+                        <ChevronRight className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                       )}
 
                       {/* Event ID */}
-                      <span className="text-sky-400/90 text-2xs font-bold shrink-0">
+                      <span className="text-blue-600 text-2xs font-bold shrink-0">
                         {evt.event_id}
                       </span>
 
@@ -179,27 +186,27 @@ export default function ActivityPage() {
                         className={cn(
                           "rounded px-1.5 py-0.5 text-[0.65rem] font-bold uppercase tracking-wider shrink-0",
                           isIncident
-                            ? "bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                            ? "bg-rose-50 text-rose-700 border border-rose-200"
                             : isMetric
-                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                             : isAgent
-                            ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
-                            : "bg-sky-500/20 text-sky-400 border border-sky-500/30"
+                            ? "bg-purple-50 text-purple-700 border border-purple-200"
+                            : "bg-sky-50 text-sky-700 border border-sky-200"
                         )}
                       >
                         {type}
                       </span>
 
                       {/* Message or Service */}
-                      <span className="truncate text-ink text-2xs font-sans">
+                      <span className="truncate text-slate-800 text-2xs font-sans">
                         {evt.message || evt.detail?.title || evt.service || "Event published"}
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[0.65rem] text-faint flex items-center gap-1">
+                      <span className="text-[0.65rem] text-slate-400 flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        {new Date(evt.timestamp).toLocaleTimeString()}
+                        {formatTime(evt.timestamp)}
                       </span>
 
                       <button
@@ -207,11 +214,11 @@ export default function ActivityPage() {
                           e.stopPropagation();
                           copyEvent(evt);
                         }}
-                        className="rounded p-1 text-muted hover:text-ink hover:bg-elevated transition-colors"
+                        className="rounded p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
                         title="Copy Event JSON"
                       >
                         {copiedId === evt.event_id ? (
-                          <Check className="h-3 w-3 text-emerald-400" />
+                          <Check className="h-3 w-3 text-emerald-600" />
                         ) : (
                           <Copy className="h-3 w-3" />
                         )}
@@ -221,12 +228,12 @@ export default function ActivityPage() {
 
                   {/* Expanded JSON Inspector */}
                   {isExpanded && (
-                    <div className="mt-2.5 rounded-lg border border-line/60 bg-[#04060a] p-3 text-2xs">
-                      <div className="flex items-center justify-between text-[0.65rem] text-faint border-b border-line/40 pb-1 mb-2">
+                    <div className="mt-2.5 rounded-lg border border-slate-200 bg-slate-50 p-3 text-2xs">
+                      <div className="flex items-center justify-between text-[0.65rem] text-slate-400 border-b border-slate-200 pb-1 mb-2">
                         <span>PAYLOAD INSPECTOR</span>
                         <span>CHANNEL: {evt.incident_id ? `incident_${evt.incident_id}` : "system"}</span>
                       </div>
-                      <pre className="overflow-x-auto text-sky-300/90 font-mono text-[0.7rem] leading-relaxed">
+                      <pre className="overflow-x-auto text-slate-800 font-mono text-[0.7rem] leading-relaxed">
                         {JSON.stringify(evt, null, 2)}
                       </pre>
                     </div>

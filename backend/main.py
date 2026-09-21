@@ -20,6 +20,7 @@ from app.api import (
     codebase,
     demo,
     events,
+    github,
     health,
     incidents,
     logs,
@@ -61,13 +62,25 @@ app = FastAPI(
 )
 
 # ── CORS ────────────────────────────────────────────────────────────────────────
-_origins = settings.cors_origin_list
+_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:4173",
+    "http://127.0.0.1:4173",
+    "https://devguard.pages.dev",
+]
+for origin in settings.cors_origin_list:
+    if origin not in _origins and origin != "*":
+        _origins.append(origin)
+if "*" in settings.cors_origin_list and settings.app_env != "production":
+    _origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
-    allow_credentials="*" not in _origins,  # wildcard + credentials is invalid
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=True if "*" not in _origins else False,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
 )
 
 # ── Routers ───────────────────────────────────────────────────────────────────
@@ -84,12 +97,14 @@ app.include_router(voice.router)
 app.include_router(office_kit.router)
 app.include_router(ws.router)
 app.include_router(codebase.router)
+app.include_router(github.router)
 
 
 import sys
 from pathlib import Path
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
     _BASE_DIR = Path(sys._MEIPASS)
@@ -114,16 +129,82 @@ def root(request: Request):
     }
 
 
-@app.get("/{full_path:path}")
-def catch_all(request: Request, full_path: str):
+@app.api_route("/{full_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
+async def catch_all(request: Request, full_path: str):
     if full_path.startswith("api/") or full_path in ("docs", "redoc", "openapi.json"):
-        return JSONResponse(status_code=404, content={"detail": "Not found"})
+        return JSONResponse(
+            status_code=404,
+            content={
+                "success": False,
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": f"Endpoint not found: {request.method} /{full_path}",
+                    "details": f"No route registered for {request.method} /{full_path}",
+                },
+            },
+        )
+    if request.method != "GET":
+        return JSONResponse(
+            status_code=405,
+            content={
+                "success": False,
+                "error": {
+                    "code": "METHOD_NOT_ALLOWED",
+                    "message": f"Method {request.method} not allowed on route /{full_path}",
+                    "details": "Static resources only support GET requests",
+                },
+            },
+            headers={"Allow": "GET"},
+        )
     file_path = _DIST_DIR / full_path
     if file_path.is_file():
         return FileResponse(file_path)
     if (_DIST_DIR / "index.html").exists():
         return FileResponse(_DIST_DIR / "index.html")
-    return JSONResponse(status_code=404, content={"detail": "Not found"})
+    return JSONResponse(
+        status_code=404,
+        content={
+            "success": False,
+            "error": {
+                "code": "NOT_FOUND",
+                "message": "Resource not found",
+                "details": f"File /{full_path} not found",
+            },
+        },
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    """Format HTTP exceptions into consistent error response structures."""
+    if exc.status_code == 405:
+        return JSONResponse(
+            status_code=405,
+            content={
+                "success": False,
+                "error": {
+                    "code": "METHOD_NOT_ALLOWED",
+                    "message": "The investigation endpoint received an unsupported HTTP method.",
+                    "details": f"Received {request.method} {request.url.path}. Expected POST /api/incidents/{{id}}/investigate",
+                },
+            },
+            headers=dict(exc.headers or {"Allow": "POST"}),
+        )
+
+    code = "NOT_FOUND" if exc.status_code == 404 else f"HTTP_{exc.status_code}"
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "success": False,
+            "error": {
+                "code": code,
+                "message": str(exc.detail),
+                "details": str(exc.detail),
+            },
+            "detail": str(exc.detail),
+        },
+        headers=dict(exc.headers or {}),
+    )
 
 
 @app.exception_handler(Exception)
@@ -132,5 +213,14 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     logger.exception("Unhandled error on %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error", "path": request.url.path},
+        content={
+            "success": False,
+            "error": {
+                "code": "INTERNAL_SERVER_ERROR",
+                "message": "Internal server error occurred.",
+                "details": str(exc),
+            },
+            "detail": "Internal server error",
+            "path": request.url.path,
+        },
     )

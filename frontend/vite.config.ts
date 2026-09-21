@@ -8,6 +8,11 @@ import path from "path";
 // native shell (APK) — there is no hard-coded host anywhere.
 const BACKEND = process.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
 
+const proxy = {
+  "/api": { target: BACKEND, changeOrigin: true },
+  "/ws": { target: BACKEND.replace(/^http/, "ws"), ws: true, changeOrigin: true },
+};
+
 export default defineConfig({
   plugins: [react()],
   // Relative base so the bundle works from file:// style native shells too.
@@ -18,12 +23,13 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
-    proxy: {
-      "/api": { target: BACKEND, changeOrigin: true },
-      "/ws": { target: BACKEND.replace(/^http/, "ws"), ws: true, changeOrigin: true },
-    },
+    proxy,
   },
-  preview: { port: 4173, host: true },
+  preview: {
+    port: 4173,
+    host: true,
+    proxy,
+  },
   build: {
     outDir: "dist",
     sourcemap: false,

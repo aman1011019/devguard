@@ -2,7 +2,30 @@
 import { useEffect, useState } from "react";
 
 export type ConnectionStatus = "LIVE" | "RECONNECTING" | "OFFLINE";
-export type DataSource = "LIVE GITHUB" | "DEMO ENGINE";
+export type DataSource =
+  | "LIVE GITHUB"
+  | "UPLOADED ZIP"
+  | "LOCAL WORKSPACE"
+  | "LIVE TELEMETRY"
+  | "LIVE PROMETHEUS"
+  | "DEMO ENGINE";
+
+export interface ActiveCodebase {
+  type: "github" | "zip" | "local";
+  name: string;
+  repository: string;
+  branch: string;
+  commit_sha: string;
+  author: string;
+  commit_message?: string;
+  path?: string;
+  total_files: number;
+  total_lines: number;
+  health_score: number;
+  issues_count: number;
+  language_counts?: Record<string, number>;
+  profile?: any;
+}
 
 export interface ActivityEvent {
   event_id: string;
@@ -39,6 +62,7 @@ export interface SystemStats {
 interface RealtimeState {
   connectionStatus: ConnectionStatus;
   dataSource: DataSource;
+  activeCodebase: ActiveCodebase | null;
   lastEventId: string | null;
   activityEvents: ActivityEvent[];
   services: ServiceItem[];
@@ -103,9 +127,27 @@ const DEFAULT_SERVICES: ServiceItem[] = [
   },
 ];
 
+const STORAGE_KEY_CODEBASE = "devguard_active_codebase";
+const STORAGE_KEY_REPOSITORIES = "devguard_repositories";
+const STORAGE_KEY_INVESTIGATIONS = "devguard_investigations";
+
+function loadStoredCodebase(): ActiveCodebase | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_CODEBASE);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+const initialStoredCodebase = loadStoredCodebase();
+
 let state: RealtimeState = {
   connectionStatus: "LIVE",
-  dataSource: "DEMO ENGINE",
+  dataSource: initialStoredCodebase
+    ? (initialStoredCodebase.type === "zip" ? "UPLOADED ZIP" : "LIVE GITHUB")
+    : "DEMO ENGINE",
+  activeCodebase: initialStoredCodebase,
   lastEventId: null,
   activityEvents: [
     {
@@ -186,6 +228,93 @@ export const realtimeStore = {
     }
   },
 
+  setActiveCodebase: (codebase: ActiveCodebase | null) => {
+    let source: DataSource = "DEMO ENGINE";
+    if (codebase) {
+      if (codebase.type === "zip") source = "UPLOADED ZIP";
+      else if (codebase.type === "local") source = "LOCAL WORKSPACE";
+      else source = "LIVE GITHUB";
+      try {
+        localStorage.setItem(STORAGE_KEY_CODEBASE, JSON.stringify(codebase));
+      } catch {}
+    } else {
+      try {
+        localStorage.removeItem(STORAGE_KEY_CODEBASE);
+      } catch {}
+    }
+    state = {
+      ...state,
+      activeCodebase: codebase,
+      dataSource: source,
+    };
+    notify();
+  },
+
+  getStoredRepositories: (): any[] => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_REPOSITORIES);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  saveStoredRepository: (repo: any) => {
+    try {
+      const existing = realtimeStore.getStoredRepositories();
+      const filtered = existing.filter((r: any) => r.full_name !== repo.full_name && r.name !== repo.name);
+      const updated = [repo, ...filtered].slice(0, 50);
+      localStorage.setItem(STORAGE_KEY_REPOSITORIES, JSON.stringify(updated));
+    } catch {}
+  },
+
+  getStoredInvestigations: (): any[] => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_INVESTIGATIONS);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  saveStoredInvestigation: (inv: any) => {
+    try {
+      const existing = realtimeStore.getStoredInvestigations();
+      const filtered = existing.filter((i: any) => i.id !== inv.id);
+      const updated = [inv, ...filtered].slice(0, 50);
+      localStorage.setItem(STORAGE_KEY_INVESTIGATIONS, JSON.stringify(updated));
+    } catch {}
+  },
+
+  refreshActiveCodebase: async () => {
+    try {
+      const res = await fetch("/api/codebase/active");
+      if (res.ok) {
+        const data = await res.json();
+        if (data && (data.repository || data.name)) {
+          realtimeStore.setActiveCodebase({
+            type: data.type || (data.path ? "local" : "github"),
+            name: data.repository || data.name || "Connected Repository",
+            repository: data.repository || data.name || "",
+            branch: data.branch || "main",
+            commit_sha: data.commit_sha || "HEAD",
+            author: data.author || "Developer",
+            commit_message: data.commit_message,
+            path: data.path,
+            total_files: data.total_files || 0,
+            total_lines: data.total_lines || 0,
+            health_score: data.health_score || 95,
+            issues_count: data.issues_count || 0,
+            language_counts: data.language_counts || {},
+            profile: data.profile,
+          });
+        }
+      }
+    } catch {
+      // Backend not reached or no active codebase yet
+    }
+  },
+
   setLastEventId: (id: string | null) => {
     state = { ...state, lastEventId: id };
   },
@@ -216,10 +345,52 @@ export const realtimeStore = {
     let source = rawEvent.source;
     let message = rawEvent.message;
 
+    if (evType === "metric_updated") {
+      const p = rawEvent.payload || rawEvent;
+      const svcName = p.service || rawEvent.service || "checkout-api";
+      const latency = p.latency_ms !== undefined ? p.latency_ms : undefined;
+      const errRate = p.error_rate !== undefined ? p.error_rate : undefined;
+      const reqRate = p.request_rate !== undefined ? `${p.request_rate} rps` : undefined;
+      const queries = p.db_queries_per_req !== undefined ? p.db_queries_per_req : (p.db_queries !== undefined ? p.db_queries : undefined);
+
+      const metricSource: DataSource = p.source === "LIVE PROMETHEUS" ? "LIVE PROMETHEUS" : "LIVE TELEMETRY";
+      source = metricSource;
+      message = `Telemetry received for ${svcName}: ${latency ?? 0}ms latency, ${errRate ?? 0}% error rate`;
+
+      state = {
+        ...state,
+        dataSource: metricSource,
+        services: state.services.map((s) => {
+          if (s.id === svcName || s.name.toLowerCase() === svcName.toLowerCase()) {
+            const nextLat = latency !== undefined ? latency : s.latency_ms;
+            const nextErr = errRate !== undefined ? errRate : s.error_rate;
+            return {
+              ...s,
+              latency_ms: nextLat,
+              error_rate: nextErr,
+              requests_per_sec: reqRate !== undefined ? reqRate : s.requests_per_sec,
+              db_queries_per_req: queries !== undefined ? queries : s.db_queries_per_req,
+              status: (nextErr > 15 || nextLat > 2000) ? "CRITICAL" : (nextErr > 3 || nextLat > 500) ? "DEGRADED" : "HEALTHY",
+            };
+          }
+          return s;
+        }),
+      };
+    } else if (evType === "log_received" || evType === "log_entry") {
+      const p = rawEvent.payload || rawEvent;
+      source = "LIVE TELEMETRY";
+      message = `[${(p.level || "INFO").toUpperCase()}] ${p.message || ""}`;
+    } else if (evType === "codebase_switched" || evType === "codebase_connected") {
+      const p = rawEvent.payload || rawEvent;
+      if (p.codebase) {
+        realtimeStore.setActiveCodebase(p.codebase);
+      }
+    }
+
     if (!source) {
       if (rawEvent.agent) {
         source = `${rawEvent.agent.toUpperCase()} AGENT`;
-      } else if (evType.includes("github")) {
+      } else if (evType.includes("github") || evType.includes("workflow")) {
         source = "GitHub Actions";
       } else {
         source = "DevGuard";
@@ -279,7 +450,7 @@ export const realtimeStore = {
           resolvedToday: state.systemStats.resolvedToday + 1,
         },
       };
-    } else if (evType === "incident_created") {
+    } else if (evType === "incident_created" || evType === "workflow_run_failed") {
       state = {
         ...state,
         services: state.services.map((s) =>
@@ -331,4 +502,11 @@ export function useRealtimeStore<T = RealtimeState>(
 }
 
 export const setDataSource = realtimeStore.setDataSource;
+export const setActiveCodebase = realtimeStore.setActiveCodebase;
+export const refreshActiveCodebase = realtimeStore.refreshActiveCodebase;
 export const clearEvents = realtimeStore.clearEvents;
+
+export function useActiveCodebase(): ActiveCodebase | null {
+  return useRealtimeStore((s) => s.activeCodebase);
+}
+

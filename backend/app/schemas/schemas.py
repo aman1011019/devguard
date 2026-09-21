@@ -18,11 +18,11 @@ class HealthResponse(BaseModel):
     version: str = "2.0.0"
     database: str = "connected"
     websocket: str = "available"
-    github: str = "demo"
-    llm: str = "demo"
-    demo_mode: bool = True
-    ai_provider: str = "demo"
-    ai_enabled: bool = False
+    github: str = "connected"
+    llm: str = "ready"
+    demo_mode: bool = False
+    ai_provider: str = "autonomous"
+    ai_enabled: bool = True
     services_monitored: int = 5
     active_incidents: int = 1
     critical_services: int = 1
@@ -196,6 +196,10 @@ class IncidentSummary(ORMModel):
     root_cause_summary: Optional[str] = None
     confidence: Optional[float] = None
     deployment_version: str
+    repository: Optional[str] = None
+    branch: Optional[str] = None
+    commit_sha: Optional[str] = None
+    author: Optional[str] = None
     detected_at: datetime
     resolved_at: Optional[datetime] = None
     duration_seconds: Optional[int] = None
@@ -259,4 +263,37 @@ class ActionResponse(BaseModel):
     incident_id: Optional[int] = None
 
 
+class RepositoryMetadataPayload(BaseModel):
+    owner: Optional[str] = None
+    name: Optional[str] = None
+    branch: Optional[str] = None
+    commit_sha: Optional[str] = None
+
+
+class InvestigationLaunchRequest(BaseModel):
+    investigation_type: str = "autonomous_swarm"
+    repository_id: Optional[Any] = None
+    repository: Optional[RepositoryMetadataPayload] = None
+
+
+class InvestigationLaunchResponse(BaseModel):
+    success: bool = True
+    ok: bool = True
+    investigation_id: str
+    incident_id: int
+    status: str = "started"
+    message: str = "Investigation started — subscribe to the incident WebSocket for live agent events"
+
+
+class SettingsPayload(BaseModel):
+    theme: str = "light"
+    demo_mode: bool = False
+    ai_provider: str = "gemini"
+    llm_api_key: Optional[str] = None
+    llm_base_url: Optional[str] = ""
+    model_name: Optional[str] = ""
+
+
 InvestigationOut.model_rebuild()
+SettingsPayload.model_rebuild()
+InvestigationLaunchResponse.model_rebuild()

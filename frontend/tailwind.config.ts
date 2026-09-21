@@ -61,8 +61,8 @@ export default {
         "3xl": "1.5rem",
       },
       boxShadow: {
-        card: "0 1px 2px rgb(var(--c-shadow) / 0.32), 0 8px 28px -12px rgb(var(--c-shadow) / 0.36)",
-        lift: "0 2px 4px rgb(var(--c-shadow) / 0.28), 0 24px 48px -20px rgb(var(--c-shadow) / 0.5)",
+        card: "0 1px 3px rgb(var(--c-shadow) / 0.07), 0 6px 18px -4px rgb(var(--c-shadow) / 0.07)",
+        lift: "0 4px 6px -1px rgb(var(--c-shadow) / 0.08), 0 20px 32px -10px rgb(var(--c-shadow) / 0.14)",
         glow: "0 0 0 1px rgb(var(--c-brand) / 0.35), 0 0 32px -6px rgb(var(--c-brand) / 0.45)",
         inset: "inset 0 1px 0 0 rgb(var(--c-hilite) / 0.06)",
       },

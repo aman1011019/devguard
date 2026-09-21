@@ -47,18 +47,18 @@ export function DiffViewer({
 
   return (
     <div className={cn("overflow-hidden rounded-2xl border border-line bg-surface font-mono", className)}>
-      <div className="flex items-center justify-between gap-2 border-b border-line bg-elevated/60 px-3.5 py-2">
-        <span className="text-2xs uppercase tracking-[0.1em] text-sky-400 font-bold">
+      <div className="flex items-center justify-between gap-2 border-b border-line bg-slate-50 px-3.5 py-2">
+        <span className="text-2xs uppercase tracking-[0.1em] text-blue-600 font-bold">
           {language ?? "diff"} · patch preview
         </span>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={handleCopy}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2 py-1 text-2xs font-semibold text-muted transition-colors hover:text-ink hover:bg-elevated"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2 py-1 text-2xs font-semibold text-muted transition-colors hover:text-ink hover:bg-white"
             title="Copy diff to clipboard"
           >
-            {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+            {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
             <span>{copied ? "Copied" : "Copy diff"}</span>
           </button>
           {canSplit ? (
